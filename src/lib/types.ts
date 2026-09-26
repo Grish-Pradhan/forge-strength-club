@@ -24,6 +24,12 @@ export interface Profile {
   updated_at?: string;
 }
 
+/** Email-confirmation state from Supabase Auth (auth.users), keyed by user id. */
+export interface EmailAuthStatus {
+  emailConfirmed: boolean;
+  confirmedAt: string | null;
+}
+
 export interface GymClass {
   id: string;
   title: string;

@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import type { Announcement, AdminUserRow, ClassWithCount, Plan } from '@/lib/types';
+import { getUserAuthStatusAction } from '@/app/actions/admin';
+import type { Announcement, AdminUserRow, ClassWithCount, EmailAuthStatus, Plan } from '@/lib/types';
 
 /**
  * Admin data hooks — READS go through the anon-key browser client
@@ -94,6 +95,28 @@ export function useAdminSiteContent() {
       if (error) throw new Error(error.message);
       return Object.fromEntries((data ?? []).map((r) => [r.key, r.value]));
     },
+  });
+}
+
+/**
+ * Live email-confirmation state for the given users, fetched from Supabase
+ * Auth via a guarded Server Action (the browser client cannot read
+ * auth.users directly, and profiles intentionally don't mirror the flag).
+ * Invalidated by useAdminMutation's ['admin'] sweep after a verify action.
+ */
+export function useAdminEmailStatus(ids: string[]) {
+  const key = ids.join(',');
+  return useQuery({
+    queryKey: ['admin', 'email-status', key],
+    queryFn: async (): Promise<Record<string, EmailAuthStatus>> => {
+      const result = await getUserAuthStatusAction(ids);
+      if (!result.ok || !result.statuses) {
+        throw new Error(result.message ?? 'Could not load email verification status.');
+      }
+      return result.statuses;
+    },
+    enabled: ids.length > 0,
+    staleTime: 30_000, // verification state rarely changes on its own
   });
 }
 

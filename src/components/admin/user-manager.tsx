@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Plus, Search, ShieldCheck, UserRound } from 'lucide-react';
+import { Loader2, MailCheck, MailX, Plus, Search, ShieldCheck, UserRound } from 'lucide-react';
 import {
+  useAdminEmailStatus,
   useAdminMutation,
   useAdminPlans,
   useAdminUsers,
@@ -13,6 +14,7 @@ import {
   deleteUserAction,
   setUserStatusAction,
   updateUserAction,
+  verifyUserEmailAction,
 } from '@/app/actions/admin';
 import { cn, errorMessage, formatFullDateTime, initials } from '@/lib/utils';
 import type { AdminUserRow, MembershipStatus, UserRole } from '@/lib/types';
@@ -53,6 +55,10 @@ export function UserManager() {
   const updateUser = useAdminMutation(updateUserAction);
   const setStatus = useAdminMutation(setUserStatusAction);
   const deleteUser = useAdminMutation(deleteUserAction);
+  const verifyEmail = useAdminMutation(verifyUserEmailAction);
+
+  const userIds = useMemo(() => (usersQuery.data ?? []).map((u) => u.id), [usersQuery.data]);
+  const emailStatus = useAdminEmailStatus(userIds);
 
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -146,7 +152,11 @@ export function UserManager() {
 
       {(() => {
         const firstError =
-          createUser.error ?? updateUser.error ?? setStatus.error ?? deleteUser.error;
+          createUser.error ??
+          updateUser.error ??
+          setStatus.error ??
+          deleteUser.error ??
+          verifyEmail.error;
         return <ErrorBanner message={firstError ? errorMessage(firstError) : null} />;
       })()}
 
@@ -164,10 +174,11 @@ export function UserManager() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[880px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
                   <th className="px-5 py-4 font-semibold">User</th>
+                  <th className="px-5 py-4 font-semibold">Email</th>
                   <th className="px-5 py-4 font-semibold">Role</th>
                   <th className="px-5 py-4 font-semibold">Membership</th>
                   <th className="px-5 py-4 font-semibold">Plan</th>
@@ -179,7 +190,7 @@ export function UserManager() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-white/40">
+                    <td colSpan={8} className="px-5 py-12 text-center text-white/40">
                       No users found.
                     </td>
                   </tr>
@@ -214,6 +225,40 @@ export function UserManager() {
                               <div className="truncate text-xs text-white/40">{u.email}</div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {(() => {
+                            const status = emailStatus.data?.[u.id];
+                            if (emailStatus.isLoading || !status) {
+                              return <span className="text-xs text-white/30">…</span>;
+                            }
+                            if (status.emailConfirmed) {
+                              return (
+                                <Badge tone="success">
+                                  <MailCheck className="h-3 w-3" strokeWidth={2.5} />
+                                  Verified
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <span className="flex items-center gap-2">
+                                <Badge tone="warning">
+                                  <MailX className="h-3 w-3" strokeWidth={2.5} />
+                                  Unverified
+                                </Badge>
+                                <button
+                                  type="button"
+                                  disabled={verifyEmail.isPending}
+                                  onClick={() =>
+                                    void verifyEmail.mutateAsync([u.id]).catch(() => {})
+                                  }
+                                  className="rounded-lg border border-gold/40 px-2.5 py-1 text-xs font-semibold text-gold transition-all hover:border-gold hover:bg-gold/10 disabled:opacity-40"
+                                >
+                                  {verifyEmail.isPending ? 'Verifying…' : 'Verify'}
+                                </button>
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-5 py-4">
                           <Badge tone={u.role === 'admin' ? 'warning' : 'neutral'}>
@@ -392,6 +437,8 @@ export function UserManager() {
         Role changes and deletions require admin privileges and are enforced server-side.
         <UserRound className="ml-2 h-3.5 w-3.5" />
         Deleting a user cascades to their bookings.
+        <MailCheck className="ml-2 h-3.5 w-3.5" />
+        Verifying an email marks the auth account as confirmed so the user can sign in.
       </p>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { EmailAuthStatus } from '@/lib/types';
 
 /**
  * Admin Server Actions — full CRUD for users, classes, plans,
@@ -168,6 +169,86 @@ export async function deleteUserAction(id: string): Promise<ActionResult> {
   return guard(async () => {
     const admin = createAdminClient();
     const { error } = await admin.auth.admin.deleteUser(id);
+    if (error) return fail(error.message);
+    return ok;
+  });
+}
+
+/* ============================================================================
+ * EMAIL VERIFICATION (Supabase Auth — source of truth: auth.users)
+ * ==========================================================================*/
+
+export interface UserAuthStatusResult extends ActionResult {
+  /** Map of user id → email-confirmation state (omitted on failure). */
+  statuses?: Record<string, EmailAuthStatus>;
+}
+
+/**
+ * Read the email-confirmation state for a set of users straight from
+ * Supabase Auth. The profiles table deliberately does NOT duplicate this
+ * flag — self-service verifications (via the signup link) would silently
+ * desync it, so we always ask the auth server for the live truth.
+ */
+export async function getUserAuthStatusAction(
+  ids: string[],
+): Promise<UserAuthStatusResult> {
+  return guard(async () => {
+    if (!Array.isArray(ids) || ids.length === 0) return { ok: true, statuses: {} };
+
+    const admin = createAdminClient();
+
+    // Page through ALL auth users, then intersect with the requested ids.
+    // (The Admin API cannot query by id list directly.)
+    const wanted = new Set(ids);
+    const statuses: Record<string, EmailAuthStatus> = {};
+    const perPage = 200;
+
+    for (let page = 1; ; page += 1) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+      if (error) return fail(error.message);
+
+      for (const user of data.users) {
+        if (!wanted.has(user.id)) continue;
+        statuses[user.id] = {
+          emailConfirmed: Boolean(user.email_confirmed_at ?? user.confirmed_at),
+          confirmedAt: user.email_confirmed_at ?? user.confirmed_at ?? null,
+        };
+      }
+
+      if (data.users.length < perPage) break; // last page
+      if (Object.keys(statuses).length === wanted.size) break; // everyone found
+    }
+
+    // Any requested id missing from auth (deleted account mid-flight) reads
+    // as unconfirmed rather than erroring the whole batch.
+    for (const id of ids) {
+      if (!statuses[id]) statuses[id] = { emailConfirmed: false, confirmedAt: null };
+    }
+
+    return { ok: true, statuses };
+  });
+}
+
+/**
+ * Mark a user's email as verified WITHOUT the user clicking the signup
+ * link (e.g. they never received the mail, or the admin created the
+ * account out-of-band). Idempotent — re-verifying a confirmed email is a
+ * harmless no-op on the auth server.
+ */
+export async function verifyUserEmailAction(id: string): Promise<ActionResult> {
+  return guard(async () => {
+    if (!id) return fail('User id is required.');
+
+    const admin = createAdminClient();
+
+    // Confirm the account exists first so we can return a precise error
+    // instead of a generic auth-API failure.
+    const { data: existing, error: fetchError } = await admin.auth.admin.getUserById(id);
+    if (fetchError || !existing?.user) return fail('User account not found in auth.');
+
+    if (existing.user.email_confirmed_at) return ok; // already verified
+
+    const { error } = await admin.auth.admin.updateUserById(id, { email_confirm: true });
     if (error) return fail(error.message);
     return ok;
   });
