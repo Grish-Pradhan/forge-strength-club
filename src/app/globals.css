@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Forge Strength Club — global styles
+   Brand tokens: ember orange / gold on deep "iron" black.
+   Fonts (Bebas Neue display + Inter body) are loaded via next/font and
+   exposed as CSS variables --font-display / --font-sans.
+   ============================================================================ */
+
+:root {
+  --ember: #ff5a1f;
+  --gold: #e8a33d;
+  --font-display: 'Bebas Neue';
+  --font-sans: 'Inter';
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-ink-800 text-bone antialiased;
+}
+
+::selection {
+  background: var(--ember);
+  color: #17181a;
+}
+
+/* Visible keyboard focus everywhere (WCAG) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Thin custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #17181a;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3d42;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4d54;
+}
+
+@layer components {
+  /* Steel-plate texture backdrop */
+  .grain-bg {
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(255, 90, 31, 0.1), transparent 40%),
+      radial-gradient(circle at 85% 0%, rgba(232, 163, 61, 0.08), transparent 35%),
+      linear-gradient(180deg, #17181a 0%, #1b1c1f 100%);
+  }
+
+  /* Blueprint grid texture (fades out toward the bottom) */
+  .grid-texture {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
+  }
+
+  /* Glassmorphism 2.0 card */
+  .glass-card {
+    @apply rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Lift-on-hover card */
+  .card-lift {
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .card-lift:hover {
+    transform: translateY(-6px);
+    border-color: rgba(255, 90, 31, 0.55);
+  }
+
+  /* Primary CTA — ember gradient + glow */
+  .btn-ember {
+    background: linear-gradient(135deg, var(--ember), #e8481a);
+    box-shadow: 0 10px 24px -10px rgba(255, 90, 31, 0.65);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  }
+  .btn-ember:hover {
+    transform: translateY(-2px) scale(1.02);
+    filter: brightness(1.06);
+    box-shadow: 0 14px 30px -8px rgba(255, 90, 31, 0.8);
+  }
+  .btn-ember:active {
+    transform: translateY(0) scale(1);
+  }
+  .btn-ember:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Secondary CTA — hairline outline */
+  .btn-outline {
+    border: 1px solid rgba(244, 241, 234, 0.35);
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+  }
+  .btn-outline:hover {
+    border-color: rgba(244, 241, 234, 0.9);
+    background-color: rgba(244, 241, 234, 0.06);
+    transform: translateY(-2px);
+  }
+
+  /* Nav link underline sweep */
+  .nav-link {
+    position: relative;
+  }
+  .nav-link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -6px;
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, var(--ember), var(--gold));
+    transition: width 0.25s ease;
+  }
+  .nav-link:hover::after {
+    width: 100%;
+  }
+
+  /* Filter chip (aria-pressed drives the active state) */
+  .chip {
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--ember);
+    border-color: var(--ember);
+    color: #17181a;
+    font-weight: 700;
+  }
+
+  /* Avatar circle */
+  .avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display), sans-serif;
+    letter-spacing: 0.04em;
+    color: rgba(23, 24, 26, 0.92);
+  }
+
+  /* Form inputs */
+  .input {
+    @apply w-full rounded-lg border border-white/10 bg-ink-900 px-4 py-2.5 text-sm text-bone placeholder:text-white/30;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .input:focus {
+    outline: none;
+    border-color: rgba(255, 90, 31, 0.6);
+    box-shadow: 0 0 0 3px rgba(255, 90, 31, 0.15);
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50;
+  }
+}
