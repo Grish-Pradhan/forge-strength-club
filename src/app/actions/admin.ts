@@ -405,13 +405,45 @@ export async function deleteAnnouncementAction(id: string): Promise<ActionResult
  * SITE CONTENT (landing page copy)
  * ==========================================================================*/
 
+/**
+ * Landing-page copy is stored in `site_content`, which is intentionally
+ * world-readable (the public landing page renders it with the anon client).
+ * That makes the write path an exfiltration risk: an admin pasting a secret
+ * into the CMS would publish it to every unauthenticated visitor. Only the
+ * fixed set of copy keys rendered by components/admin/content-manager.tsx
+ * may be written.
+ */
+const ALLOWED_CONTENT_KEYS = new Set([
+  'hero_headline',
+  'hero_subhead',
+  'hero_cta',
+  'features_title',
+  'features_subhead',
+  'pricing_title',
+  'pricing_subhead',
+]);
+
 /** Update landing-page copy (key/value pairs). */
 export async function updateSiteContentAction(
   entries: Record<string, string>,
 ): Promise<ActionResult> {
   return guard(async () => {
+    const pairs = Object.entries(entries ?? {});
+    if (pairs.length === 0) return fail('No content to save.');
+    if (pairs.length > 50) return fail('Too many content entries.');
+
+    const rejected = pairs
+      .map(([key]) => key)
+      .filter((key) => !ALLOWED_CONTENT_KEYS.has(key));
+    if (rejected.length > 0) {
+      return fail(`Unknown content key(s): ${rejected.join(', ')}`);
+    }
+
+    const invalid = pairs.find(([, value]) => typeof value !== 'string' || value.length > 5000);
+    if (invalid) return fail(`Content value for "${invalid[0]}" must be text under 5000 characters.`);
+
     const admin = createAdminClient();
-    const rows = Object.entries(entries).map(([key, value]) => ({ key, value }));
+    const rows = pairs.map(([key, value]) => ({ key, value }));
 
     const { error } = await admin.from('site_content').upsert(rows, { onConflict: 'key' });
     if (error) return fail(error.message);

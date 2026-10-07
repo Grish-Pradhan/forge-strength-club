@@ -11,9 +11,14 @@ import { PlanCheckout } from '@/components/dashboard/plan-checkout';
 
 /**
  * Profile & Settings — manage personal info (name, avatar URL) and view
- * membership/billing details. Updates run through the RLS-protected
- * `profiles_update_own` policy (members can never change their own role —
- * the prevent_role_escalation trigger blocks that server-side).
+ * membership/billing details.
+ *
+ * SECURITY: only `full_name` and `avatar_url` may be self-edited. The RLS
+ * UPDATE policy proves row ownership only, so column-level protection is
+ * enforced by the `protect_profile_privileged_columns` trigger — members
+ * cannot self-assign role, membership_status, plan_id or membership_expires_at.
+ * Only send editable profile fields from here; never spread a form object
+ * straight into `.update()`.
  */
 export function ProfileForm() {
   const { profile, refreshProfile, signOut } = useAuth();

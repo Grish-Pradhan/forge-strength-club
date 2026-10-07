@@ -16,11 +16,17 @@
 --   site_content    — key/value store for landing-page copy (content mgmt)
 --
 -- Security:
---   * RLS is ENABLED on every table.
+--   * RLS is ENABLED on every table — including `payments`, which must never
+--     be omitted (Supabase grants ALL on public tables by default).
 --   * Helper function is_admin() is SECURITY DEFINER to avoid recursive
 --     policy evaluation.
---   * prevent_role_escalation() trigger stops members from promoting
---     themselves to admin through any RLS-permitted update path.
+--   * profiles holds PII (email) + authorization data (role, membership) and
+--     is readable ONLY by its owner or an admin. There is no anonymous
+--     SELECT policy on it.
+--   * protect_profile_privileged_columns() trigger stops members from
+--     self-assigning paid entitlements (role, membership_status, plan_id,
+--     membership_expires_at) through the row-owning UPDATE policy.
+--   * payments are read-only for members; all writes are service-role.
 --   * book_class() RPC enforces capacity atomically (race-condition safe).
 -- ============================================================================
 
@@ -258,37 +264,70 @@ where not exists (select 1 from public.profiles p where p.id = u.id)
 on conflict (id) do nothing;
 
 -- ----------------------------------------------------------------------------
--- TRIGGER: prevent role self-escalation
--- Members can never change their own (or anyone's) role through
--- RLS-permitted paths. Service-role connections (auth.uid() is null) and
--- verified admins may change roles — this is what the Admin Panel uses.
+-- TRIGGER: protect privileged profile columns (mass-assignment guard)
 -- ----------------------------------------------------------------------------
-create or replace function public.prevent_role_escalation()
+-- `profiles_update_own` only proves ROW OWNERSHIP (auth.uid() = id); it does
+-- not restrict WHICH COLUMNS may be written. Without this trigger any member
+-- could PATCH their own row and self-grant paid entitlements:
+--   membership_status = 'active', plan_id = <elite>, membership_expires_at
+--   = now() + 10 years  ->  free membership + unlimited class booking.
+-- `prevent_role_escalation` only guarded `role`, leaving the money columns
+-- wide open. This trigger locks down every privileged column in one place.
+--
+-- Allowed writers:
+--   * service-role connections (auth.uid() IS NULL) — Server Actions that
+--     already verified the caller is an admin (app/actions/admin.ts).
+--   * verified admins (role = 'admin') on their own or others' rows.
+-- Everything else must leave privileged columns untouched.
+-- ----------------------------------------------------------------------------
+create or replace function public.protect_profile_privileged_columns()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
 begin
+  -- service_role / server-side admin client: auth.uid() is null -> allowed
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  -- verified admins may change any privileged column
+  if exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin') then
+    return new;
+  end if;
+
   if new.role is distinct from old.role then
-    -- service_role / server-side admin client: auth.uid() is null -> allowed
-    if auth.uid() is null then
-      return new;
-    end if;
-    -- verified admins may change roles
-    if exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin') then
-      return new;
-    end if;
     raise exception 'FORBIDDEN: role changes require admin privileges';
   end if;
+  if new.membership_status is distinct from old.membership_status then
+    raise exception 'FORBIDDEN: membership_status changes require admin privileges';
+  end if;
+  if new.plan_id is distinct from old.plan_id then
+    raise exception 'FORBIDDEN: plan_id changes require admin privileges';
+  end if;
+  if new.membership_expires_at is distinct from old.membership_expires_at then
+    raise exception 'FORBIDDEN: membership_expires_at changes require admin privileges';
+  end if;
+  if new.join_date is distinct from old.join_date then
+    raise exception 'FORBIDDEN: join_date is immutable';
+  end if;
+  if new.email is distinct from old.email then
+    raise exception 'FORBIDDEN: email is managed by Supabase Auth';
+  end if;
+  if new.id is distinct from old.id then
+    raise exception 'FORBIDDEN: id is immutable';
+  end if;
+
   return new;
 end;
 $$;
 
 drop trigger if exists trg_prevent_role_escalation on public.profiles;
-create trigger trg_prevent_role_escalation
+drop trigger if exists trg_protect_profile_privileged on public.profiles;
+create trigger trg_protect_profile_privileged
   before update on public.profiles
-  for each row execute function public.prevent_role_escalation();
+  for each row execute function public.protect_profile_privileged_columns();
 
 -- ----------------------------------------------------------------------------
 -- FUNCTION: book_class(p_class_id)
@@ -369,14 +408,26 @@ alter table public.bookings      enable row level security;
 alter table public.plans         enable row level security;
 alter table public.announcements enable row level security;
 alter table public.site_content  enable row level security;
+-- payments MUST be listed here. Supabase grants ALL on every table in the
+-- public schema to anon/authenticated by default, so a table missing from
+-- this list is world-readable AND world-writable through PostgREST — its
+-- policies below would be inert. Never add a table without enabling RLS.
+alter table public.payments      enable row level security;
 
 -- ---------- profiles ----------
--- Anyone (even anonymous) can see basic profiles (needed for trainer cards /
--- leaderboards). Emails are exposed only to the owner and admins.
+-- SECURITY: profiles holds PII (email) and authorization data (role,
+-- membership_status, plan_id). A row is readable ONLY by its owner or an
+-- admin. There is deliberately NO world-readable policy: an earlier version
+-- shipped `profiles_read_all ... using (true)`, which let anyone holding the
+-- browser-public anon key enumerate every member's email address and the
+-- admin account. Do not reintroduce an anonymous SELECT path on this table —
+-- if the UI needs non-sensitive display data, add an explicit column-
+-- restricted view (see `public.classes_public` for the pattern).
 drop policy if exists "profiles_read_all" on public.profiles;
-create policy "profiles_read_all"
+drop policy if exists "profiles_read_own_or_admin" on public.profiles;
+create policy "profiles_read_own_or_admin"
   on public.profiles for select
-  using (true);
+  using (auth.uid() = id or public.is_admin());
 
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own"
@@ -424,10 +475,13 @@ create policy "bookings_read_own_or_admin"
   on public.bookings for select
   using (auth.uid() = user_id or public.is_admin());
 
+-- SECURITY: there is deliberately NO member INSERT policy. Every booking is
+-- created by the book_class() RPC, which validates membership status, that
+-- the class has not started, and that capacity is not exceeded — atomically.
+-- A direct client INSERT would satisfy `auth.uid() = user_id` while skipping
+-- every one of those checks, letting a non-member or an over-capacity class
+-- be booked freely. Cancellations remain available (UPDATE below).
 drop policy if exists "bookings_insert_own" on public.bookings;
-create policy "bookings_insert_own"
-  on public.bookings for insert
-  with check (auth.uid() = user_id);
 
 drop policy if exists "bookings_update_own_or_admin" on public.bookings;
 create policy "bookings_update_own_or_admin"
@@ -477,45 +531,83 @@ create policy "site_content_write_admin"
   with check (public.is_admin());
 
 -- ---------- payments ----------
--- Members may create + read ONLY their own payment attempts. Status flips
--- (completed/failed) happen server-side through the service-role client in
--- the gateway callback, after HMAC signature verification — members can
--- never mark their own payment as completed. Admins see all.
+-- Members may READ ONLY their own payment attempts. Nothing else.
+--
+-- There is deliberately NO insert/update/delete policy for anon/authenticated:
+-- payment rows are created by /api/payments/checkout with the SERVICE-ROLE
+-- client (after it re-reads the authoritative price from `plans`), and status
+-- flips happen in the gateway callback after HMAC signature verification.
+-- A member-writable INSERT would let anyone forge `status = 'completed'`
+-- rows and poison the admin revenue report; a member-writable UPDATE would
+-- let them self-fulfil a membership for free. So: reads only.
 drop policy if exists "payments_read_own" on public.payments;
 create policy "payments_read_own"
   on public.payments for select
   using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "payments_insert_own" on public.payments;
-create policy "payments_insert_own"
-  on public.payments for insert
-  with check (auth.uid() = user_id);
-
 drop policy if exists "payments_update_admin" on public.payments;
-create policy "payments_update_admin"
-  on public.payments for update
-  using (public.is_admin())
-  with check (public.is_admin());
-
 drop policy if exists "payments_delete_admin" on public.payments;
-create policy "payments_delete_admin"
-  on public.payments for delete
-  using (public.is_admin());
+
+-- Only the service role (which bypasses RLS) may write payments. The four
+-- revokes below make that explicit at the GRANT layer as defence in depth,
+-- so a future `enable row level security` omission cannot reopen writes.
+revoke insert, update, delete on public.payments from anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- FUNCTION: class_confirmed_count(uuid)
+-- Returns ONLY an integer headcount for a class. SECURITY DEFINER so it can
+-- count bookings without exposing booking rows to the caller.
+-- ----------------------------------------------------------------------------
+create or replace function public.class_confirmed_count(p_class_id uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::int
+  from public.bookings b
+  where b.class_id = p_class_id
+    and b.booking_status = 'confirmed';
+$$;
 
 -- ----------------------------------------------------------------------------
 -- VIEW: classes_public
--- Classes joined with a live confirmed-booking count (used by the public
--- schedule + member booking UI). Read-only; exposes counts only.
+-- Classes joined with a live confirmed-booking COUNT (used by the public
+-- schedule + member booking UI). Exposes counts only — no booking rows, no
+-- user identifiers.
+--
+-- SECURITY INVOKER: without it the view runs with the definer's rights and
+-- silently bypasses RLS on every table it touches (a Postgres view default).
+-- The count itself comes from class_confirmed_count() above, so invoker mode
+-- still returns correct numbers for anonymous schedule visitors while the
+-- underlying bookings stay invisible.
 -- ----------------------------------------------------------------------------
-create or replace view public.classes_public as
-select
-  c.*,
-  (
-    select count(*)
-    from public.bookings b
-    where b.class_id = c.id and b.booking_status = 'confirmed'
-  ) as booked_count
-from public.classes c;
+drop view if exists public.classes_public;
+
+do $$
+begin
+  if current_setting('server_version_num')::int >= 150000 then
+    execute $view$
+      create view public.classes_public with (security_invoker = true) as
+      select
+        c.*,
+        public.class_confirmed_count(c.id) as booked_count
+      from public.classes c
+    $view$;
+  else
+    -- Pre-PG15 fallback: no security_invoker option available.
+    execute $view$
+      create view public.classes_public as
+      select
+        c.*,
+        public.class_confirmed_count(c.id) as booked_count
+      from public.classes c
+    $view$;
+  end if;
+end;
+$$;
 
 grant select on public.classes_public to anon, authenticated, service_role;
 
@@ -576,17 +668,38 @@ insert into storage.buckets (id, name, public) values ('site-assets', 'site-asse
 -- policy" on direct storage operations).
 --
 --  * avatars      — members may upload/update/delete ONLY inside their own
---                   folder (avatars/<user-id>/...); readable by everyone
---                   (public bucket URLs bypass RLS for <img> tags anyway).
---  * class-covers / site-assets — writes are admin-only; readable by everyone.
+--                   folder (avatars/<user-id>/...).
+--  * class-covers / site-assets — writes are admin-only.
 --  * The app's /api/upload route additionally enforces both rules server-side
 --    and uploads with the service-role client, so it works even before these
 --    policies are applied.
+--
+-- SECURITY: the SELECT policies below previously used a bare
+-- `bucket_id = 'avatars'`, which granted the ANONYMOUS role the right to LIST
+-- every object in the bucket. Combined with the world-readable `profiles`
+-- table that produced a complete user directory: names, emails and avatar
+-- paths for every account. Reads are now restricted to signed-in users, and
+-- avatar listing is further limited to a signed-in user's own folder.
 
 drop policy if exists "avatars_select_all" on storage.objects;
-create policy "avatars_select_all"
+drop policy if exists "avatars_read_authenticated" on storage.objects;
+drop policy if exists "avatars_list_own_folder" on storage.objects;
+-- NOTE: multiple PERMISSIVE policies on the same command are OR-ed together,
+-- so this must be the ONLY select policy on the avatars bucket — adding a
+-- broader "any authenticated user" policy alongside it would silently re-open
+-- full enumeration. Listing is therefore limited to the caller's own folder
+-- (or an admin). Rendering an avatar in <img> is unaffected: public-bucket
+-- object URLs are served by /object/public/ and bypass RLS entirely.
+create policy "avatars_read_own_folder"
   on storage.objects for select
-  using (bucket_id = 'avatars');
+  using (
+    bucket_id = 'avatars'
+    and auth.uid() is not null
+    and (
+      (storage.foldername(name))[1] = auth.uid()::text
+      or public.is_admin()
+    )
+  );
 
 drop policy if exists "avatars_insert_own_folder" on storage.objects;
 create policy "avatars_insert_own_folder"
@@ -621,9 +734,17 @@ create policy "avatars_delete_own_folder"
   );
 
 drop policy if exists "covers_select_all" on storage.objects;
-create policy "covers_select_all"
+drop policy if exists "covers_read_authenticated" on storage.objects;
+drop policy if exists "covers_read_admin" on storage.objects;
+-- Admin-only. These buckets are rendered through public object URLs, so
+-- restricting the storage API here costs the UI nothing while removing
+-- anonymous enumeration of every class cover and site asset.
+create policy "covers_read_admin"
   on storage.objects for select
-  using (bucket_id in ('class-covers', 'site-assets'));
+  using (
+    bucket_id in ('class-covers', 'site-assets')
+    and public.is_admin()
+  );
 
 drop policy if exists "covers_write_admin" on storage.objects;
 create policy "covers_write_admin"
@@ -640,3 +761,67 @@ drop policy if exists "covers_delete_admin" on storage.objects;
 create policy "covers_delete_admin"
   on storage.objects for delete
   using (bucket_id in ('class-covers', 'site-assets') and public.is_admin());
+
+-- ============================================================================
+-- PRIVILEGE HARDENING (defence in depth — RLS is the primary control)
+-- ============================================================================
+-- Supabase's default privileges grant ALL on every table in the `public`
+-- schema to `anon` and `authenticated`. RLS is what actually stops the rows,
+-- but if a table is ever missed by `enable row level security` (exactly what
+-- happened to `payments`) the GRANTs alone leave it wide open. Narrowing the
+-- table privileges means a future omission fails CLOSED.
+-- ============================================================================
+
+-- profiles: read (own/admin rows) only. No client-side insert — profile rows
+-- are created by the on_auth_user_created trigger or by admin Server Actions.
+revoke insert on public.profiles from anon, authenticated;
+revoke delete on public.profiles from anon, authenticated;
+
+-- bookings: inserts go exclusively through the book_class() RPC (see above).
+-- Deletes are admin-only (a member cancels by setting booking_status).
+revoke insert, delete on public.bookings from anon, authenticated;
+
+-- classes / plans / announcements / site_content: reads only for anon.
+revoke insert, update, delete on public.classes      from anon;
+revoke insert, update, delete on public.plans        from anon;
+revoke insert, update, delete on public.announcements from anon;
+revoke insert, update, delete on public.site_content from anon;
+
+-- authenticated members must not write reference data either — admin Server
+-- Actions use the service-role client for every mutation.
+revoke insert, update, delete on public.classes      from authenticated;
+revoke insert, update, delete on public.plans        from authenticated;
+revoke insert, update, delete on public.announcements from authenticated;
+revoke insert, update, delete on public.site_content from authenticated;
+
+-- SECURITY DEFINER functions: Postgres grants EXECUTE to PUBLIC by default.
+-- Lock each one down to the roles that actually need it.
+revoke all on function public.is_admin() from public;
+grant  execute on function public.is_admin() to authenticated, service_role;
+
+revoke all on function public.class_confirmed_count(uuid) from public;
+grant  execute on function public.class_confirmed_count(uuid) to anon, authenticated, service_role;
+
+revoke all on function public.book_class(uuid) from public;
+grant  execute on function public.book_class(uuid) to authenticated, service_role;
+
+-- Trigger functions are never called directly by a role.
+revoke all on function public.protect_profile_privileged_columns() from public;
+revoke all on function public.handle_new_user() from public;
+revoke all on function public.set_updated_at() from public;
+
+-- ============================================================================
+-- POST-DEPLOY VERIFICATION
+-- ============================================================================
+-- Run these after deploying to confirm no table is left without RLS.
+-- Every row must report true. If any table reports false, it is fully
+-- exposed through PostgREST with the browser-public anon key.
+-- ============================================================================
+-- select relname as table, relrowsecurity as rls_enabled
+-- from pg_class
+-- where relnamespace = 'public'::regnamespace
+--   and relkind = 'r'
+-- order by relrowsecurity, relname;
+--
+-- Expected: bookings, classes, classes_public (view), payments, plans,
+--           profiles, announcements, site_content -> all true.
