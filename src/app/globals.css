@@ -4,14 +4,99 @@
 
 /* ============================================================================
    Forge Strength Club — global styles
-   Brand tokens: ember orange / gold on deep "iron" black.
+   Site-wide festival palettes. RGB channels preserve Tailwind opacity modifiers.
    Fonts (Bebas Neue display + Inter body) are loaded via next/font and
    exposed as CSS variables --font-display / --font-sans.
    ============================================================================ */
 
-:root {
-  --ember: #ff5a1f;
-  --gold: #e8a33d;
+:root,
+[data-theme='default'] {
+  color-scheme: dark;
+  --bg-deep-rgb: 12 14 18;
+  --bg-primary-rgb: 20 22 27;
+  --bg-secondary-rgb: 37 40 48;
+  --card-bg-rgb: 28 31 38;
+  --surface-raised-rgb: 47 51 61;
+  --surface-muted-rgb: 60 64 75;
+  --text-main-rgb: 247 244 240;
+  --accent-rgb: 255 91 115;
+  --accent-strong-rgb: 239 75 101;
+  --accent-deep-rgb: 194 38 67;
+  --gold-rgb: 239 187 100;
+  --border-rgb: 68 62 72;
+}
+
+[data-theme='dashain'] {
+  --bg-deep-rgb: 24 10 15;
+  --bg-primary-rgb: 43 16 23;
+  --bg-secondary-rgb: 72 32 36;
+  --card-bg-rgb: 56 23 30;
+  --surface-raised-rgb: 88 40 42;
+  --surface-muted-rgb: 109 51 50;
+  --text-main-rgb: 255 245 220;
+  --accent-rgb: 255 157 48;
+  --accent-strong-rgb: 246 127 44;
+  --accent-deep-rgb: 201 54 55;
+  --gold-rgb: 250 205 93;
+  --border-rgb: 109 65 49;
+}
+
+[data-theme='tihar'] {
+  --bg-deep-rgb: 10 12 35;
+  --bg-primary-rgb: 19 24 57;
+  --bg-secondary-rgb: 39 45 87;
+  --card-bg-rgb: 27 33 72;
+  --surface-raised-rgb: 50 57 104;
+  --surface-muted-rgb: 65 70 125;
+  --text-main-rgb: 255 247 226;
+  --accent-rgb: 255 194 79;
+  --accent-strong-rgb: 249 158 50;
+  --accent-deep-rgb: 219 116 35;
+  --gold-rgb: 255 217 128;
+  --border-rgb: 76 73 111;
+}
+
+[data-theme='christmas'] {
+  --bg-deep-rgb: 7 23 18;
+  --bg-primary-rgb: 12 37 29;
+  --bg-secondary-rgb: 27 64 49;
+  --card-bg-rgb: 18 49 38;
+  --surface-raised-rgb: 35 79 61;
+  --surface-muted-rgb: 47 96 75;
+  --text-main-rgb: 248 246 232;
+  --accent-rgb: 255 109 117;
+  --accent-strong-rgb: 244 86 101;
+  --accent-deep-rgb: 191 38 59;
+  --gold-rgb: 235 201 127;
+  --border-rgb: 54 89 66;
+}
+
+[data-theme='new-year'] {
+  --bg-deep-rgb: 7 10 20;
+  --bg-primary-rgb: 12 17 32;
+  --bg-secondary-rgb: 28 37 59;
+  --card-bg-rgb: 19 26 44;
+  --surface-raised-rgb: 40 50 75;
+  --surface-muted-rgb: 54 66 94;
+  --text-main-rgb: 239 248 255;
+  --accent-rgb: 105 244 209;
+  --accent-strong-rgb: 64 215 200;
+  --accent-deep-rgb: 35 171 177;
+  --gold-rgb: 251 213 104;
+  --border-rgb: 51 73 91;
+}
+
+/* Recompute aliases on scoped preview palettes as well as the document root. */
+:root,
+[data-theme] {
+  --bg-primary: rgb(var(--bg-primary-rgb));
+  --bg-secondary: rgb(var(--bg-secondary-rgb));
+  --text-main: rgb(var(--text-main-rgb));
+  --accent: rgb(var(--accent-rgb));
+  --card-bg: rgb(var(--card-bg-rgb));
+  --border-color: rgb(var(--border-rgb));
+  --ember: var(--accent);
+  --gold: rgb(var(--gold-rgb));
   --font-display: 'Bebas Neue';
   --font-sans: 'Inter';
 }
@@ -24,9 +109,27 @@ body {
   @apply bg-ink-800 text-bone antialiased;
 }
 
+/* Keep existing hover/motion transitions; add theme colours as their baseline. */
+@layer base {
+  *, ::before, ::after {
+    transition-property: background-color, color, border-color, box-shadow, fill, stroke;
+    transition-duration: 0.3s;
+    transition-timing-function: ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    transition-duration: 0s !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 ::selection {
   background: var(--ember);
-  color: #17181a;
+  color: rgb(var(--bg-deep-rgb));
 }
 
 /* Visible keyboard focus everywhere (WCAG) */
@@ -46,23 +149,23 @@ select:focus-visible {
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #17181a;
+  background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
-  background: #3a3d42;
+  background: rgb(var(--surface-muted-rgb));
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4d54;
+  background: var(--accent);
 }
 
 @layer components {
   /* Steel-plate texture backdrop */
   .grain-bg {
     background-image:
-      radial-gradient(circle at 15% 10%, rgba(255, 90, 31, 0.1), transparent 40%),
-      radial-gradient(circle at 85% 0%, rgba(232, 163, 61, 0.08), transparent 35%),
-      linear-gradient(180deg, #17181a 0%, #1b1c1f 100%);
+      radial-gradient(circle at 15% 10%, rgb(var(--accent-rgb) / 0.1), transparent 40%),
+      radial-gradient(circle at 85% 0%, rgb(var(--gold-rgb) / 0.08), transparent 35%);
+    background-color: var(--bg-primary);
   }
 
   /* Blueprint grid texture (fades out toward the bottom) */
@@ -77,29 +180,33 @@ select:focus-visible {
 
   /* Glassmorphism 2.0 card */
   .glass-card {
-    @apply rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md;
+    @apply rounded-2xl border backdrop-blur-md;
+    border-color: var(--border-color);
+    background-color: var(--card-bg);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   }
 
   /* Lift-on-hover card */
   .card-lift {
-    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
   }
   .card-lift:hover {
     transform: translateY(-6px);
-    border-color: rgba(255, 90, 31, 0.55);
+    border-color: rgb(var(--accent-rgb) / 0.55);
   }
 
   /* Primary CTA — ember gradient + glow */
   .btn-ember {
-    background: linear-gradient(135deg, var(--ember), #e8481a);
-    box-shadow: 0 10px 24px -10px rgba(255, 90, 31, 0.65);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    background-color: var(--accent);
+    background-image: linear-gradient(135deg, transparent, rgb(0 0 0 / 0.1));
+    color: rgb(var(--bg-deep-rgb));
+    box-shadow: 0 10px 24px -10px rgb(var(--accent-rgb) / 0.65);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease, background-color 0.3s ease, color 0.3s ease;
   }
   .btn-ember:hover {
     transform: translateY(-2px) scale(1.02);
     filter: brightness(1.06);
-    box-shadow: 0 14px 30px -8px rgba(255, 90, 31, 0.8);
+    box-shadow: 0 14px 30px -8px rgb(var(--accent-rgb) / 0.8);
   }
   .btn-ember:active {
     transform: translateY(0) scale(1);
@@ -113,12 +220,12 @@ select:focus-visible {
 
   /* Secondary CTA — hairline outline */
   .btn-outline {
-    border: 1px solid rgba(244, 241, 234, 0.35);
+    border: 1px solid rgb(var(--text-main-rgb) / 0.35);
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
   }
   .btn-outline:hover {
-    border-color: rgba(244, 241, 234, 0.9);
-    background-color: rgba(244, 241, 234, 0.06);
+    border-color: rgb(var(--text-main-rgb) / 0.9);
+    background-color: rgb(var(--text-main-rgb) / 0.06);
     transform: translateY(-2px);
   }
 
@@ -147,7 +254,7 @@ select:focus-visible {
   .chip[aria-pressed='true'] {
     background: var(--ember);
     border-color: var(--ember);
-    color: #17181a;
+    color: rgb(var(--bg-deep-rgb));
     font-weight: 700;
   }
 
@@ -158,18 +265,18 @@ select:focus-visible {
     justify-content: center;
     font-family: var(--font-display), sans-serif;
     letter-spacing: 0.04em;
-    color: rgba(23, 24, 26, 0.92);
+    color: rgb(var(--bg-deep-rgb) / 0.92);
   }
 
   /* Form inputs */
   .input {
-    @apply w-full rounded-lg border border-white/10 bg-ink-900 px-4 py-2.5 text-sm text-bone placeholder:text-white/30;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    @apply w-full rounded-lg border border-theme-border bg-ink-900 px-4 py-2.5 text-sm text-bone placeholder:text-white/30;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease, color 0.3s ease;
   }
   .input:focus {
     outline: none;
-    border-color: rgba(255, 90, 31, 0.6);
-    box-shadow: 0 0 0 3px rgba(255, 90, 31, 0.15);
+    border-color: rgb(var(--accent-rgb) / 0.6);
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.15);
   }
 
   .label {

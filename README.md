@@ -139,6 +139,41 @@ update public.site_content set value = 'Simple pricing in Nepali Rupees. Pay onl
 
 ## Scripts
 
+### Global festival themes
+
+Open **Admin → Overview → Global Festival Theme** and choose Default Gym,
+Dashain, Tihar, Christmas or New Year. A selection affects the landing page and
+both dashboards. The default palette is dark iron with fitness crimson.
+
+- `GET /api/theme` returns `{ theme, version, updatedAt }` with `Cache-Control: no-store`.
+- `PUT /api/admin/theme` accepts `{ "theme": "dashain" }`. It requires a verified
+  admin session cookie, JSON input and a same-origin request. Valid keys are
+  `default`, `dashain`, `tihar`, `christmas` and `new-year`.
+- Apply `supabase/migrations/20261007133511_global_festival_theme.sql` to a new
+  environment before deploying the code (the full schema also includes it).
+  It creates a singleton `global_theme` row, read-only public RLS permissions,
+  a revision trigger and its Realtime publication. No new environment keys or
+  packages are needed. The existing server-only Supabase secret is required for writes.
+- The root layout reads the current theme for the initial HTML response, so
+  pages render dynamically instead of serving stale theme HTML. A root provider
+  refetches on load and listens to Supabase Realtime; other tabs also receive a
+  local invalidation. Focus/reconnect and a 30-second poll recover missed events.
+  During an outage, open pages retain the last confirmed theme and new pages
+  fall back to Default Gym. Failed saves roll back the admin's local preview.
+- All Tailwind `ink`, `ember`, `gold` and `bone` tokens use the CSS variables in
+  `src/app/globals.css`. Edit the `[data-theme]` palettes there. Reduced-motion
+  preferences disable transitions. Success/error status colours stay semantic.
+- Successful changes include the admin identity in the existing private audit log.
+
+Integration verification: start the local app, then run
+`RUN_THEME_INTEGRATION=1 node scripts/verify-global-theme.mjs` (PowerShell:
+`$env:RUN_THEME_INTEGRATION='1'; node scripts/verify-global-theme.mjs`). This
+temporarily cycles the connected database's global theme and creates disposable
+admin/member accounts. Use a test project for repeat runs; the script restores
+the original theme and removes its exact fixtures in `finally`. `--browser`
+pauses before cleanup for a UI pass. Production credentials must never be
+committed or included in browser code.
+
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Dev server (Turbopack) |

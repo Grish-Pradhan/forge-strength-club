@@ -3,6 +3,9 @@ import './globals.css';
 import { AuthProvider } from '@/context/auth-context';
 import { QueryProvider } from '@/providers/query-provider';
 import { ActivityTracker } from '@/components/activity-tracker';
+import { ThemeProvider } from '@/providers/theme-provider';
+import { getGlobalTheme } from '@/lib/services/theme';
+import { DEFAULT_THEME } from '@/lib/themes';
 
 /**
  * Fonts: Bebas Neue (display) + Inter (body), loaded via Google Fonts
@@ -46,9 +49,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Render the saved theme in the first HTML response, avoiding a default flash.
+  const initialTheme = await getGlobalTheme().catch(() => DEFAULT_THEME);
   return (
-    <html lang="en">
+    <html lang="en" data-theme={initialTheme.theme} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -58,12 +63,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans">
-        <QueryProvider>
-          <AuthProvider>
-            <ActivityTracker />
-            {children}
-          </AuthProvider>
-        </QueryProvider>
+        <ThemeProvider initialTheme={initialTheme}>
+          <QueryProvider>
+            <AuthProvider>
+              <ActivityTracker />
+              {children}
+            </AuthProvider>
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

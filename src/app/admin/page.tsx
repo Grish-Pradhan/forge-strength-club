@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server';
 import { formatFullDateTime, formatPrice } from '@/lib/utils';
 import { Reveal, RevealGroup, RevealItem } from '@/components/landing/reveal';
 import type { AdminUserRow, ClassWithCount, Plan } from '@/lib/types';
+import { ThemeSwitcher } from '@/components/admin/theme-switcher';
 
 /**
  * Admin Panel — Overview / Analytics.
@@ -105,6 +106,8 @@ export default async function AdminOverviewPage() {
           </p>
         </div>
       </Reveal>
+
+      <ThemeSwitcher />
 
       {/* ---------- Metric cards ---------- */}
       <RevealGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

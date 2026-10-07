@@ -269,7 +269,7 @@ function AnnouncementsEditor() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 accent-[#FF5A1F]"
+              className="h-4 w-4 accent-ember"
             />
             Live (visible on the landing page)
           </label>
@@ -530,7 +530,7 @@ function AmenitiesEditor() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 accent-[#FF5A1F]"
+              className="h-4 w-4 accent-ember"
             />
             Live (visible on the landing page)
           </label>
@@ -742,7 +742,7 @@ function PlansEditor() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 accent-[#FF5A1F]"
+              className="h-4 w-4 accent-ember"
             />
             Active (visible on the pricing page)
           </label>

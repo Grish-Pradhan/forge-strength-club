@@ -109,7 +109,7 @@ export function DashboardShell({
                   className={cn(
                     'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all',
                     active
-                      ? 'bg-ember/15 text-ember shadow-[inset_0_0_0_1px_rgba(255,90,31,0.3)]'
+                      ? 'bg-ember/15 text-ember ring-1 ring-inset ring-ember/30'
                       : 'text-white/60 hover:bg-white/5 hover:text-bone',
                   )}
                 >

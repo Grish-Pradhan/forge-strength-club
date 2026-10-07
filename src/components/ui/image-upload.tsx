@@ -176,7 +176,7 @@ export function ImageUpload({
           className={cn(
             'cursor-pointer border-2 border-dashed rounded-xl p-5 text-center transition-all duration-200 flex flex-col items-center justify-center gap-2.5',
             dragOver
-              ? 'border-ember bg-ember/10 shadow-[0_0_20px_rgba(255,90,31,0.2)]'
+              ? 'border-ember bg-ember/10 shadow-ember'
               : 'border-white/15 bg-white/[0.02] hover:border-white/30 hover:bg-white/[0.04]',
           )}
         >
