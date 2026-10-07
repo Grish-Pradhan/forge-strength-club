@@ -26,7 +26,7 @@ import type { BillingCycle } from '@/lib/types';
  */
 
 function redirectUrl(path: '/payment/success' | '/payment/failed', params: Record<string, string>) {
-  const url = new URL(path, process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
+  const url = new URL(path, process.env.NEXT_PUBLIC_SITE_URL || 'https://forgestrengthclub.vercel.app');
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   return NextResponse.redirect(url);
 }
