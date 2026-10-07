@@ -4,7 +4,8 @@ import { createClient as createSupabaseClient, type SupabaseClient } from '@supa
  * Server-only Supabase client using the SERVICE ROLE key.
  *
  * ⚠️ NEVER import this file from a Client Component and NEVER expose
- * SUPABASE_SERVICE_ROLE_KEY to the browser. It bypasses RLS entirely.
+ * SUPABASE_SECRET_KEY (or the legacy service-role key) to the browser.
+ * It bypasses RLS entirely.
  *
  * Used exclusively inside Server Actions / Route Handlers that have ALREADY
  * verified (with the user-scoped client) that the caller is an admin.
@@ -12,15 +13,16 @@ import { createClient as createSupabaseClient, type SupabaseClient } from '@supa
 let adminClient: SupabaseClient | null = null;
 
 export function createAdminClient(): SupabaseClient {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secretKey) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY is not set. Admin write operations require it.',
+      'SUPABASE_SECRET_KEY is not set. Admin write operations require it.',
     );
   }
   if (!adminClient) {
     adminClient = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      secretKey,
       {
         auth: {
           autoRefreshToken: false,

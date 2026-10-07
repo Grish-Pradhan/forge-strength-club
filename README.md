@@ -70,8 +70,8 @@ forge-strength-club/
    Google and/or Apple. Add your redirect URL:
    `http://localhost:3000/auth/callback` (or your production URL).
 4. **Environment variables**: copy `.env.local.example` to `.env.local` and fill in:
-   - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Supabase → Settings → API)
-   - `SUPABASE_SERVICE_ROLE_KEY` (server-only — required for admin CRUD + payments)
+   - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Supabase → Settings → API)
+   - `SUPABASE_SECRET_KEY` (server-only — required for admin CRUD + payments; never expose it to the browser)
    - `NEXT_PUBLIC_SITE_URL`
 5. **Payments (NPR)** — two gateways are wired in:
    - **eSewa (ePay v2)**: works immediately in test mode with the public sandbox
@@ -161,8 +161,8 @@ git push -u origin main
 
 | Variable | Notes |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | server-only — admin CRUD + payments |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Settings → API |
+| `SUPABASE_SECRET_KEY` | server-only — admin CRUD + payments |
 | `NEXT_PUBLIC_SITE_URL` | **must be** `https://<your-app>.vercel.app` |
 | `ESEWA_ENV` / `ESEWA_MERCHANT_CODE` / `ESEWA_SECRET_KEY` | `test` + `EPAYTEST` sandbox works immediately; switch to your real merchant creds for live |
 | `KHALTI_ENV` / `KHALTI_SECRET_KEY` | optional — Khalti ePayment API |
