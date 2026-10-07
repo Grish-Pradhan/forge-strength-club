@@ -417,6 +417,7 @@ const ALLOWED_CONTENT_KEYS = new Set([
   'hero_headline',
   'hero_subhead',
   'hero_cta',
+  'hero_image_url',
   'features_title',
   'features_subhead',
   'pricing_title',

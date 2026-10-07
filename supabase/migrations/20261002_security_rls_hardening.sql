@@ -239,7 +239,10 @@ revoke insert, update, delete on public.site_content from authenticated;
 -- 8. function privileges — Postgres grants EXECUTE to PUBLIC by default
 -- ----------------------------------------------------------------------------
 revoke all on function public.is_admin() from public;
-grant  execute on function public.is_admin() to authenticated, service_role;
+-- The function only answers whether the current caller is an admin; for an
+-- anonymous caller auth.uid() is null and it returns false. Anonymous
+-- execute is required because public/storage RLS expressions reference it.
+grant  execute on function public.is_admin() to anon, authenticated, service_role;
 
 revoke all on function public.class_confirmed_count(uuid) from public;
 grant  execute on function public.class_confirmed_count(uuid) to anon, authenticated, service_role;

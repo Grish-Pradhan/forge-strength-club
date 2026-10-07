@@ -69,6 +69,16 @@ export async function POST(request: Request) {
     }
     const billingCycle = (plan.billing_cycle as BillingCycle) ?? 'monthly';
 
+    // Do not create an orphaned pending payment when an optional provider is
+    // not configured. Fail before inserting the payment row.
+    const khalti = provider === 'khalti' ? getKhaltiConfig() : null;
+    if (provider === 'khalti' && !khalti) {
+      return NextResponse.json(
+        { error: 'Khalti is not configured yet — please pay with eSewa.' },
+        { status: 503 },
+      );
+    }
+
     // 3. Create the pending payment row.
     const transactionUuid = randomUUID();
     const admin = createAdminClient();
@@ -113,14 +123,6 @@ export async function POST(request: Request) {
     }
 
     // 4b. Khalti — initiate server-to-server, return the payment URL.
-    const khalti = getKhaltiConfig();
-    if (!khalti) {
-      return NextResponse.json(
-        { error: 'Khalti is not configured yet — please pay with eSewa.' },
-        { status: 503 },
-      );
-    }
-
     const init = await initiateKhaltiPayment(
       {
         amount,
@@ -131,7 +133,7 @@ export async function POST(request: Request) {
         customerName,
         customerEmail: user.email ?? undefined,
       },
-      khalti,
+      khalti!,
     );
 
     if (!init.ok || !init.paymentUrl) {

@@ -1,38 +1,4 @@
--- ============================================================================
--- FORGE STRENGTH CLUB — Supabase schema
--- ----------------------------------------------------------------------------
--- Run this in the Supabase SQL Editor (or `supabase db push` with this file
--- in supabase/migrations/). It is idempotent-safe to run once on a fresh
--- project.
---
--- Tables:
---   profiles        — public user data + role (admin/member) + membership
---   classes         — gym classes with trainer, schedule, capacity
---   bookings        — user <-> class reservations (unique per user/class)
---   plans           — membership plans (NPR price, billing cycle, JSON features)
---   payments        — online payments (eSewa / Khalti) with signature-verified
---                     status flips + membership activation on success
---   announcements   — gym-wide announcements managed from the admin panel
---   site_content    — key/value store for landing-page copy (content mgmt)
---
--- Security:
---   * RLS is ENABLED on every table — including `payments`, which must never
---     be omitted (Supabase grants ALL on public tables by default).
---   * Helper function is_admin() is SECURITY DEFINER to avoid recursive
---     policy evaluation.
---   * profiles holds PII (email) + authorization data (role, membership) and
---     is readable ONLY by its owner or an admin. There is no anonymous
---     SELECT policy on it.
---   * protect_profile_privileged_columns() trigger stops members from
---     self-assigning paid entitlements (role, membership_status, plan_id,
---     membership_expires_at) through the row-owning UPDATE policy.
---   * payments are read-only for members; all writes are service-role.
---   * book_class() RPC enforces capacity atomically (race-condition safe).
--- ============================================================================
 
--- ----------------------------------------------------------------------------
--- EXTENSIONS
--- ----------------------------------------------------------------------------
 create extension if not exists "pgcrypto";
 
 -- ----------------------------------------------------------------------------
@@ -797,7 +763,10 @@ revoke insert, update, delete on public.site_content from authenticated;
 -- SECURITY DEFINER functions: Postgres grants EXECUTE to PUBLIC by default.
 -- Lock each one down to the roles that actually need it.
 revoke all on function public.is_admin() from public;
-grant  execute on function public.is_admin() to authenticated, service_role;
+-- The function only answers whether the current caller is an admin; for an
+-- anonymous caller auth.uid() is null and it returns false. Anonymous
+-- execute is required because public/storage RLS expressions reference it.
+grant  execute on function public.is_admin() to anon, authenticated, service_role;
 
 revoke all on function public.class_confirmed_count(uuid) from public;
 grant  execute on function public.class_confirmed_count(uuid) to anon, authenticated, service_role;
