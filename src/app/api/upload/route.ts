@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { writeAuditEvent } from '@/lib/audit';
 
 const ALLOWED_BUCKETS = ['avatars', 'class-covers', 'site-assets'] as const;
 type AllowedBucket = (typeof ALLOWED_BUCKETS)[number];
@@ -11,7 +12,6 @@ const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/webp',
   'image/gif',
-  'image/svg+xml',
 ];
 
 export async function POST(request: Request) {
@@ -22,6 +22,16 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
+      await writeAuditEvent(
+        {
+          eventType: 'unauthorized_upload_attempt',
+          category: 'security',
+          severity: 'warning',
+          path: '/api/upload',
+          description: 'An unauthenticated upload attempt was blocked.',
+        },
+        request.headers,
+      );
       return NextResponse.json({ error: 'Unauthorized: please sign in.' }, { status: 401 });
     }
 
@@ -34,6 +44,18 @@ export async function POST(request: Request) {
     }
 
     if (!ALLOWED_BUCKETS.includes(bucket as AllowedBucket)) {
+      await writeAuditEvent(
+        {
+          eventType: 'invalid_upload_bucket',
+          category: 'security',
+          severity: 'warning',
+          actorId: user.id,
+          path: '/api/upload',
+          description: 'An upload to an invalid storage bucket was blocked.',
+          metadata: { bucket: bucket.slice(0, 80) },
+        },
+        request.headers,
+      );
       return NextResponse.json({ error: `Invalid bucket: ${bucket}` }, { status: 400 });
     }
 
@@ -46,6 +68,18 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (profile?.role !== 'admin') {
+        await writeAuditEvent(
+          {
+            eventType: 'forbidden_site_upload',
+            category: 'security',
+            severity: 'critical',
+            actorId: user.id,
+            path: '/api/upload',
+            description: 'A non-admin site asset upload attempt was blocked.',
+            metadata: { bucket },
+          },
+          request.headers,
+        );
         return NextResponse.json(
           { error: 'Forbidden: only admins can upload site or class assets.' },
           { status: 403 },
@@ -54,6 +88,18 @@ export async function POST(request: Request) {
     }
 
     if (file.size > MAX_FILE_SIZE) {
+      await writeAuditEvent(
+        {
+          eventType: 'oversized_upload_blocked',
+          category: 'security',
+          severity: 'warning',
+          actorId: user.id,
+          path: '/api/upload',
+          description: 'An oversized image upload was blocked.',
+          metadata: { bucket, bytes: file.size },
+        },
+        request.headers,
+      );
       return NextResponse.json(
         { error: 'File too large. Maximum allowed size is 10MB.' },
         { status: 400 },
@@ -61,6 +107,18 @@ export async function POST(request: Request) {
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      await writeAuditEvent(
+        {
+          eventType: 'unsupported_upload_blocked',
+          category: 'security',
+          severity: 'warning',
+          actorId: user.id,
+          path: '/api/upload',
+          description: 'An unsupported file upload was blocked.',
+          metadata: { bucket, mime_type: file.type.slice(0, 100) },
+        },
+        request.headers,
+      );
       return NextResponse.json(
         { error: 'Unsupported file type. Please upload a JPG, PNG, WebP, or GIF image.' },
         { status: 400 },
@@ -95,6 +153,19 @@ export async function POST(request: Request) {
     }
 
     const { data: publicUrlData } = admin.storage.from(bucket).getPublicUrl(filePath);
+
+    await writeAuditEvent(
+      {
+        eventType: 'image_uploaded',
+        category: bucket === 'avatars' ? 'activity' : 'admin',
+        severity: 'success',
+        actorId: user.id,
+        path: '/api/upload',
+        description: `Uploaded an image to ${bucket}.`,
+        metadata: { bucket, object_path: filePath, bytes: file.size },
+      },
+      request.headers,
+    );
 
     return NextResponse.json({
       url: publicUrlData.publicUrl,

@@ -1,4 +1,4 @@
-import type { Announcement, ClassWithCount, Plan } from './types';
+import type { Amenity, Announcement, ClassWithCount, Plan } from './types';
 
 /**
  * Static fallback data.
@@ -28,6 +28,15 @@ export const FALLBACK_PLANS: Plan[] = [
 export const FALLBACK_ANNOUNCEMENTS: Announcement[] = [
   { id: 'fb-an-1', title: 'New cold plunge installed', body: 'The recovery lab is live — sauna + cold plunge now included with Forge and Forge Elite memberships.', is_active: true },
   { id: 'fb-an-2', title: 'Powerlifting meet — Oct 18', body: 'Our first in-house meet. Squat, bench, dead. Sign up at the front desk — spectator entry is free.', is_active: true },
+];
+
+export const FALLBACK_AMENITIES: Amenity[] = [
+  { id: 'fb-amenity-1', title: 'Elite Strength Floor', description: 'Competition-grade platforms, calibrated plates, dumbbells to 60kg. Everything you need to chase PRs — and nothing you don’t.', image_url: '/amenities/strength-floor.webp', icon_name: 'dumbbell', layout: 'large', is_active: true, sort_order: 0 },
+  { id: 'fb-amenity-2', title: 'HIIT Arena', description: 'Sled track, assault bikes, ropes and rig.', image_url: '/amenities/hiit-arena.webp', icon_name: 'flame', layout: 'standard', is_active: true, sort_order: 1 },
+  { id: 'fb-amenity-3', title: 'Recovery Lab', description: 'Sauna + cold plunge, included with Forge plans.', image_url: '/amenities/recovery-lab.webp', icon_name: 'waves', layout: 'standard', is_active: true, sort_order: 2 },
+  { id: 'fb-amenity-4', title: 'Personal Training', description: '1-on-1 coaching with video review and periodised programming.', image_url: '/amenities/personal-training.webp', icon_name: 'clipboard', layout: 'wide', is_active: true, sort_order: 3 },
+  { id: 'fb-amenity-5', title: 'Community That Shows Up', description: 'In-house meets, team WODs and a floor culture built on effort.', image_url: '/amenities/community.webp', icon_name: 'users', layout: 'wide', is_active: true, sort_order: 4 },
+  { id: 'fb-amenity-6', title: 'Body-Comp Scanning', description: 'Monthly InBody scans so progress is measured, not guessed.', image_url: '/amenities/body-comp.webp', icon_name: 'heart', layout: 'standard', is_active: true, sort_order: 5 },
 ];
 
 export const FALLBACK_SITE_CONTENT: Record<string, string> = {

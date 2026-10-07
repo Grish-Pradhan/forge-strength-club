@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, CalendarDays, UserCircle, FileText } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarDays,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  ShieldCheck,
+  UserCircle,
+} from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { BrandMark } from '@/components/logo';
 import { cn, initials } from '@/lib/utils';
@@ -23,7 +31,9 @@ const ADMIN_NAV = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Users', icon: UserCircle },
   { href: '/admin/classes', label: 'Classes', icon: CalendarDays },
+  { href: '/admin/bookings', label: 'Bookings', icon: CalendarCheck },
   { href: '/admin/content', label: 'Site Content', icon: FileText },
+  { href: '/admin/logs', label: 'Activity Logs', icon: ShieldCheck },
 ];
 
 export function DashboardShell({
@@ -123,7 +133,7 @@ export function DashboardShell({
 
         {/* Mobile tab nav */}
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink-800/95 backdrop-blur-xl md:hidden">
-          <nav className="mx-auto flex max-w-7xl" aria-label={`${area} navigation`}>
+          <nav className="mx-auto flex max-w-7xl overflow-x-auto" aria-label={`${area} navigation`}>
             {nav.map((item) => {
               const active = pathname === item.href;
               return (
@@ -132,7 +142,7 @@ export function DashboardShell({
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex flex-1 flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors',
+                    'flex min-w-20 flex-1 flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors',
                     active ? 'text-ember' : 'text-white/50',
                   )}
                 >

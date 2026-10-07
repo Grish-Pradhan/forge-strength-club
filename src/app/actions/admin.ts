@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { EmailAuthStatus } from '@/lib/types';
+import { writeAuditEvent } from '@/lib/audit';
+import type { BookingStatus, EmailAuthStatus } from '@/lib/types';
 
 /**
  * Admin Server Actions — full CRUD for users, classes, plans,
@@ -42,19 +43,38 @@ async function requireAdmin(): Promise<string> {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (profile?.role !== 'admin') throw new Error('FORBIDDEN');
+  if (profile?.role !== 'admin') throw new Error(`FORBIDDEN:${user.id}`);
   return user.id;
 }
 
 /** Wrap an admin operation with friendly error mapping. */
-async function guard(fn: () => Promise<ActionResult>): Promise<ActionResult> {
+async function guard(fn: (adminId: string) => Promise<ActionResult>): Promise<ActionResult> {
   try {
-    await requireAdmin();
-    return await fn();
+    const adminId = await requireAdmin();
+    return await fn(adminId);
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
-    if (raw.includes('UNAUTHENTICATED')) return fail('Please sign in again.');
-    if (raw.includes('FORBIDDEN')) return fail('Admin privileges required.');
+    if (raw.includes('UNAUTHENTICATED')) {
+      await writeAuditEvent({
+        eventType: 'unauthenticated_admin_action',
+        category: 'security',
+        severity: 'critical',
+        path: '/admin/server-action',
+        description: 'An unauthenticated admin action was blocked.',
+      });
+      return fail('Please sign in again.');
+    }
+    if (raw.includes('FORBIDDEN')) {
+      await writeAuditEvent({
+        eventType: 'forbidden_admin_action',
+        category: 'security',
+        severity: 'critical',
+        actorId: raw.split(':')[1] || null,
+        path: '/admin/server-action',
+        description: 'A non-admin attempted a protected admin action.',
+      });
+      return fail('Admin privileges required.');
+    }
     console.error('[admin action]', raw);
     return fail(raw);
   }
@@ -309,6 +329,126 @@ export async function deleteClassAction(id: string): Promise<ActionResult> {
 }
 
 /* ============================================================================
+ * BOOKINGS
+ * ==========================================================================*/
+
+/** Book an upcoming class for any user while preserving atomic capacity checks. */
+export async function createAdminBookingAction(
+  userId: string,
+  classId: string,
+): Promise<ActionResult> {
+  return guard(async (adminId) => {
+    if (!userId || !classId) return fail('User and class are required.');
+
+    const userClient = await createClient();
+    const { error } = await userClient.rpc('admin_book_user', {
+      p_user_id: userId,
+      p_class_id: classId,
+    });
+    if (error) {
+      if (error.message.includes('CLASS_FULL')) return fail('This class is already full.');
+      if (error.message.includes('CLASS_STARTED')) return fail('This class has already started.');
+      return fail(error.message);
+    }
+
+    const admin = createAdminClient();
+    const [{ data: member }, { data: gymClass }] = await Promise.all([
+      admin.from('profiles').select('full_name,email').eq('id', userId).maybeSingle(),
+      admin.from('classes').select('title').eq('id', classId).maybeSingle(),
+    ]);
+    await writeAuditEvent({
+      eventType: 'admin_booking_created',
+      category: 'admin',
+      severity: 'success',
+      actorId: adminId,
+      path: '/admin/bookings',
+      description: `Booked ${member?.full_name ?? member?.email ?? 'a user'} into ${gymClass?.title ?? 'a class'}.`,
+      metadata: { target_user_id: userId, class_id: classId },
+    });
+    return ok;
+  });
+}
+
+/** Change any booking between confirmed, cancelled and attended. */
+export async function updateBookingStatusAction(
+  bookingId: string,
+  status: BookingStatus,
+): Promise<ActionResult> {
+  return guard(async (adminId) => {
+    if (!['confirmed', 'cancelled', 'attended'].includes(status)) {
+      return fail('Invalid booking status.');
+    }
+    const admin = createAdminClient();
+    const { data: booking } = await admin
+      .from('bookings')
+      .select('user_id,class_id,profile:profiles(full_name,email),class:classes(title)')
+      .eq('id', bookingId)
+      .maybeSingle();
+    if (!booking) return fail('Booking not found.');
+
+    const { error } =
+      status === 'confirmed'
+        ? await (await createClient()).rpc('admin_book_user', {
+            p_user_id: booking.user_id,
+            p_class_id: booking.class_id,
+          })
+        : await admin.from('bookings').update({ booking_status: status }).eq('id', bookingId);
+    if (error) return fail(error.message);
+
+    const profile = booking.profile as unknown as { full_name?: string; email?: string } | null;
+    const gymClass = booking.class as unknown as { title?: string } | null;
+    await writeAuditEvent({
+      eventType: 'admin_booking_status_changed',
+      category: 'admin',
+      severity: status === 'cancelled' ? 'warning' : 'info',
+      actorId: adminId,
+      path: '/admin/bookings',
+      description: `Set ${profile?.full_name ?? profile?.email ?? 'a user'}'s ${gymClass?.title ?? 'class'} booking to ${status}.`,
+      metadata: {
+        booking_id: bookingId,
+        target_user_id: booking.user_id,
+        class_id: booking.class_id,
+        status,
+      },
+    });
+    return ok;
+  });
+}
+
+/** Permanently remove a booking while retaining its audit record. */
+export async function deleteBookingAction(bookingId: string): Promise<ActionResult> {
+  return guard(async (adminId) => {
+    const admin = createAdminClient();
+    const { data: booking } = await admin
+      .from('bookings')
+      .select('user_id,class_id,profile:profiles(full_name,email),class:classes(title)')
+      .eq('id', bookingId)
+      .maybeSingle();
+    if (!booking) return fail('Booking not found.');
+
+    const { error } = await admin.from('bookings').delete().eq('id', bookingId);
+    if (error) return fail(error.message);
+
+    const profile = booking.profile as unknown as { full_name?: string; email?: string } | null;
+    const gymClass = booking.class as unknown as { title?: string } | null;
+    await writeAuditEvent({
+      eventType: 'admin_booking_deleted',
+      category: 'admin',
+      severity: 'warning',
+      actorId: adminId,
+      path: '/admin/bookings',
+      description: `Deleted ${profile?.full_name ?? profile?.email ?? 'a user'}'s ${gymClass?.title ?? 'class'} booking.`,
+      metadata: {
+        booking_id: bookingId,
+        target_user_id: booking.user_id,
+        class_id: booking.class_id,
+      },
+    });
+    return ok;
+  });
+}
+
+/* ============================================================================
  * PLANS (memberships)
  * ==========================================================================*/
 
@@ -396,6 +536,74 @@ export async function deleteAnnouncementAction(id: string): Promise<ActionResult
   return guard(async () => {
     const admin = createAdminClient();
     const { error } = await admin.from('announcements').delete().eq('id', id);
+    if (error) return fail(error.message);
+    return ok;
+  });
+}
+
+/* ============================================================================
+ * AMENITIES
+ * ==========================================================================*/
+
+const AMENITY_ICONS = new Set(['dumbbell', 'flame', 'waves', 'clipboard', 'users', 'heart']);
+const AMENITY_LAYOUTS = new Set(['standard', 'wide', 'large']);
+
+export interface AmenityInput {
+  id?: string;
+  title: string;
+  description?: string;
+  image_url?: string | null;
+  icon_name: 'dumbbell' | 'flame' | 'waves' | 'clipboard' | 'users' | 'heart';
+  layout: 'standard' | 'wide' | 'large';
+  is_active: boolean;
+  sort_order: number;
+}
+
+/** Create or update a landing-page amenity card. */
+export async function upsertAmenityAction(input: AmenityInput): Promise<ActionResult> {
+  return guard(async () => {
+    const title = input.title.trim();
+    const imageUrl = input.image_url?.trim() || null;
+
+    if (!title) return fail('Amenity title is required.');
+    if (title.length > 100) return fail('Amenity title must be 100 characters or fewer.');
+    if ((input.description?.length ?? 0) > 1000) {
+      return fail('Amenity description must be 1000 characters or fewer.');
+    }
+    if (imageUrl && imageUrl.length > 2000) return fail('Image URL is too long.');
+    if (imageUrl && !imageUrl.startsWith('/') && !/^https:\/\//i.test(imageUrl)) {
+      return fail('Image must use an HTTPS URL or a site-relative path.');
+    }
+    if (!AMENITY_ICONS.has(input.icon_name)) return fail('Invalid amenity icon.');
+    if (!AMENITY_LAYOUTS.has(input.layout)) return fail('Invalid amenity layout.');
+    if (!Number.isFinite(input.sort_order)) return fail('Sort order must be a number.');
+
+    const admin = createAdminClient();
+    const payload = {
+      title,
+      description: input.description?.trim() || null,
+      image_url: imageUrl,
+      icon_name: input.icon_name,
+      layout: input.layout,
+      is_active: input.is_active,
+      sort_order: Math.round(input.sort_order),
+    };
+
+    const { error } = input.id
+      ? await admin.from('amenities').update(payload).eq('id', input.id)
+      : await admin.from('amenities').insert(payload);
+
+    if (error) return fail(error.message);
+    return ok;
+  });
+}
+
+/** Delete a landing-page amenity card. */
+export async function deleteAmenityAction(id: string): Promise<ActionResult> {
+  return guard(async () => {
+    if (!id) return fail('Amenity id is required.');
+    const admin = createAdminClient();
+    const { error } = await admin.from('amenities').delete().eq('id', id);
     if (error) return fail(error.message);
     return ok;
   });

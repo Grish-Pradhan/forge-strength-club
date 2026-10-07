@@ -219,11 +219,13 @@ export default async function AdminOverviewPage() {
 
       {/* ---------- Quick links ---------- */}
       <Reveal delay={0.2}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {[
             { href: '/admin/users', label: 'User Management', desc: 'Add, edit, suspend, delete' },
             { href: '/admin/classes', label: 'Class Management', desc: 'CRUD classes & trainers' },
+            { href: '/admin/bookings', label: 'Booking Control', desc: 'Manage every member booking' },
             { href: '/admin/content', label: 'Content Management', desc: 'Copy, plans, announcements' },
+            { href: '/admin/logs', label: 'Activity & Security', desc: 'Visits, actions, IPs and alerts' },
           ].map((l) => (
             <Link key={l.href} href={l.href} className="glass-card card-lift group p-5">
               <div className="flex items-center gap-1.5 font-semibold text-bone">

@@ -8,6 +8,7 @@ import { Reveal } from '@/components/landing/reveal';
 import { Megaphone } from 'lucide-react';
 import {
   getAnnouncements,
+  getAmenities,
   getPlans,
   getSiteContent,
   getUpcomingClasses,
@@ -27,8 +28,13 @@ import {
 export const revalidate = 30;
 
 export default async function LandingPage() {
-  const [{ classes }, { plans }, announcements, { content, live: contentLive }] =
-    await Promise.all([getUpcomingClasses(), getPlans(), getAnnouncements(), getSiteContent()]);
+  const [{ classes }, { plans }, announcements, amenities, { content }] = await Promise.all([
+    getUpcomingClasses(),
+    getPlans(),
+    getAnnouncements(),
+    getAmenities(),
+    getSiteContent(),
+  ]);
 
   return (
     <div className="min-h-screen">
@@ -60,7 +66,11 @@ export default async function LandingPage() {
           </div>
         )}
 
-        <Features title={content.features_title} subhead={content.features_subhead} />
+        <Features
+          amenities={amenities}
+          title={content.features_title}
+          subhead={content.features_subhead}
+        />
 
         <ClassSchedule classes={classes} />
 

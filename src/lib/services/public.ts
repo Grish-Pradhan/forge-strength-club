@@ -2,11 +2,12 @@ import { createPublicClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   FALLBACK_ANNOUNCEMENTS,
+  FALLBACK_AMENITIES,
   FALLBACK_CLASSES,
   FALLBACK_PLANS,
   FALLBACK_SITE_CONTENT,
 } from '@/lib/fallback-data';
-import type { Announcement, ClassWithCount, Plan } from '@/lib/types';
+import type { Amenity, Announcement, ClassWithCount, Plan } from '@/lib/types';
 
 /**
  * Public data service — used by Server Components on the landing page.
@@ -87,6 +88,29 @@ export async function getAnnouncements(): Promise<Announcement[]> {
   } catch (err) {
     console.error('[public.getAnnouncements]', err);
     return FALLBACK_ANNOUNCEMENTS;
+  }
+}
+
+/** Fetch active landing-page amenity cards in their admin-defined order. */
+export async function getAmenities(): Promise<Amenity[]> {
+  if (!isSupabaseConfigured()) return FALLBACK_AMENITIES;
+
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from('amenities')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      if (error) console.error('[public.getAmenities]', error.message);
+      return FALLBACK_AMENITIES;
+    }
+    return data as Amenity[];
+  } catch (err) {
+    console.error('[public.getAmenities]', err);
+    return FALLBACK_AMENITIES;
   }
 }
 

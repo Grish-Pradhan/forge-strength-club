@@ -3,7 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { getUserAuthStatusAction } from '@/app/actions/admin';
-import type { Announcement, AdminUserRow, ClassWithCount, EmailAuthStatus, Plan } from '@/lib/types';
+import type {
+  Amenity,
+  Announcement,
+  AdminBookingRow,
+  AdminUserRow,
+  AuditEvent,
+  ClassWithCount,
+  EmailAuthStatus,
+  Plan,
+} from '@/lib/types';
 
 /**
  * Admin data hooks — READS go through the anon-key browser client
@@ -56,6 +65,40 @@ export function useAdminClasses() {
   });
 }
 
+/** Every booking with its member and class, newest first. */
+export function useAdminBookings() {
+  return useQuery({
+    queryKey: ['admin', 'bookings'],
+    queryFn: async (): Promise<AdminBookingRow[]> => {
+      const { data, error } = await supabase()
+        .from('bookings')
+        .select(
+          '*, profile:profiles!bookings_user_id_fkey(id,full_name,email,membership_status), class:classes(*)',
+        )
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data as AdminBookingRow[]) ?? [];
+    },
+  });
+}
+
+/** Private activity/security history (admin-only RLS). */
+export function useAdminAuditLogs() {
+  return useQuery({
+    queryKey: ['admin', 'audit-events'],
+    queryFn: async (): Promise<AuditEvent[]> => {
+      const { data, error } = await supabase()
+        .from('audit_events')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw new Error(error.message);
+      return (data as AuditEvent[]) ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+}
+
 /** All plans (including inactive). */
 export function useAdminPlans() {
   return useQuery({
@@ -82,6 +125,21 @@ export function useAdminAnnouncements() {
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
       return (data as Announcement[]) ?? [];
+    },
+  });
+}
+
+/** All amenity cards (including hidden cards). */
+export function useAdminAmenities() {
+  return useQuery({
+    queryKey: ['admin', 'amenities'],
+    queryFn: async (): Promise<Amenity[]> => {
+      const { data, error } = await supabase()
+        .from('amenities')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as Amenity[]) ?? [];
     },
   });
 }

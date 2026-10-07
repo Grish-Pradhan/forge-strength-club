@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { bookClassAction, cancelBookingAction } from '@/app/actions/member';
 import type { Booking, ClassWithCount } from '@/lib/types';
 
 /**
@@ -22,8 +23,9 @@ export function useMyBookings() {
     queryFn: async (): Promise<Booking[]> => {
       const { data, error } = await supabase()
         .from('bookings')
-        .select('*, class:classes(*)')
+        .select('*, class:classes!inner(*)')
         .eq('booking_status', 'confirmed')
+        .gte('class.schedule_time', new Date().toISOString())
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
       return (data as Booking[]) ?? [];
@@ -56,9 +58,9 @@ export function useBookClass() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (classId: string) => {
-      const { data, error } = await supabase().rpc('book_class', { p_class_id: classId });
-      if (error) throw new Error(friendlyBookingError(error.message));
-      return data as string;
+      const result = await bookClassAction(classId);
+      if (!result.ok) throw new Error(result.message ?? 'Booking failed.');
+      return result.id;
     },
     onSuccess: () => {
       // Refresh booked counts + my bookings immediately.
@@ -73,26 +75,12 @@ export function useCancelBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (bookingId: string) => {
-      const { error } = await supabase()
-        .from('bookings')
-        .update({ booking_status: 'cancelled' })
-        .eq('id', bookingId);
-      if (error) throw new Error(error.message);
+      const result = await cancelBookingAction(bookingId);
+      if (!result.ok) throw new Error(result.message ?? 'Could not cancel booking.');
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookingsKey });
       void queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
-}
-
-/** Map raw PostgREST exception messages to friendly copy. */
-function friendlyBookingError(raw: string): string {
-  if (raw.includes('CLASS_FULL')) return 'This class is at capacity — try another slot.';
-  if (raw.includes('ALREADY_BOOKED')) return 'You already have a spot in this class.';
-  if (raw.includes('MEMBERSHIP_INACTIVE'))
-    return 'Your membership is not active. Visit your profile or the front desk to renew.';
-  if (raw.includes('CLASS_STARTED')) return 'This class has already started.';
-  if (raw.includes('NOT_AUTHENTICATED')) return 'Please sign in again.';
-  return raw;
 }

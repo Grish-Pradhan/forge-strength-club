@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/auth-context';
 import { QueryProvider } from '@/providers/query-provider';
+import { ActivityTracker } from '@/components/activity-tracker';
 
 /**
  * Fonts: Bebas Neue (display) + Inter (body), loaded via Google Fonts
@@ -10,7 +11,15 @@ import { QueryProvider } from '@/providers/query-provider';
  * Exposed as CSS variables --font-display / --font-sans (see globals.css).
  */
 
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+const metadataOrigin = configuredSiteUrl
+  ? configuredSiteUrl.startsWith('http')
+    ? configuredSiteUrl
+    : `https://${configuredSiteUrl}`
+  : 'http://localhost:3000';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(metadataOrigin),
   title: {
     default: 'Forge Strength Club — Forge Your Strongest Self',
     template: '%s · Forge Strength Club',
@@ -50,7 +59,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans">
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <ActivityTracker />
+            {children}
+          </AuthProvider>
         </QueryProvider>
       </body>
     </html>

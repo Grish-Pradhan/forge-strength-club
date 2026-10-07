@@ -6,6 +6,8 @@ import {
   HeartPulse,
   ClipboardList,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { Amenity, AmenityIcon, AmenityLayout } from '@/lib/types';
 import { Reveal, RevealGroup, RevealItem } from './reveal';
 
 /**
@@ -13,53 +15,30 @@ import { Reveal, RevealGroup, RevealItem } from './reveal';
  * uniform 3-card row. Large feature tile + supporting glass tiles.
  */
 
-const AMENITIES = [
-  {
-    icon: Dumbbell,
-    title: 'Elite Strength Floor',
-    description:
-      'Competition-grade platforms, calibrated plates, dumbbells to 60kg. Everything you need to chase PRs — and nothing you don’t.',
-    span: 'md:col-span-2 md:row-span-2',
-    big: true,
-  },
-  {
-    icon: Flame,
-    title: 'HIIT Arena',
-    description: 'Sled track, assault bikes, ropes and rig.',
-    span: '',
-    big: false,
-  },
-  {
-    icon: Waves,
-    title: 'Recovery Lab',
-    description: 'Sauna + cold plunge, included with Forge plans.',
-    span: '',
-    big: false,
-  },
-  {
-    icon: ClipboardList,
-    title: 'Personal Training',
-    description: '1-on-1 coaching with video review and periodised programming.',
-    span: 'md:col-span-2',
-    big: false,
-  },
-  {
-    icon: Users,
-    title: 'Community That Shows Up',
-    description: 'In-house meets, team WODs and a floor culture built on effort.',
-    span: 'md:col-span-2',
-    big: false,
-  },
-  {
-    icon: HeartPulse,
-    title: 'Body-Comp Scanning',
-    description: 'Monthly InBody scans so progress is measured, not guessed.',
-    span: '',
-    big: false,
-  },
-];
+const ICONS: Record<AmenityIcon, LucideIcon> = {
+  dumbbell: Dumbbell,
+  flame: Flame,
+  waves: Waves,
+  clipboard: ClipboardList,
+  users: Users,
+  heart: HeartPulse,
+};
 
-export function Features({ title, subhead }: { title: string; subhead: string }) {
+const LAYOUT_CLASSES: Record<AmenityLayout, string> = {
+  standard: '',
+  wide: 'md:col-span-2',
+  large: 'md:col-span-2 md:row-span-2',
+};
+
+export function Features({
+  amenities,
+  title,
+  subhead,
+}: {
+  amenities: Amenity[];
+  title: string;
+  subhead: string;
+}) {
   return (
     <section id="amenities" className="grain-bg relative py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -74,34 +53,67 @@ export function Features({ title, subhead }: { title: string; subhead: string })
         </Reveal>
 
         <RevealGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-          {AMENITIES.map((a) => (
-            <RevealItem key={a.title} className={a.span}>
-              <div
-                className={`glass-card card-lift group flex h-full flex-col p-6 ${
-                  a.big ? 'justify-end md:p-8' : ''
-                }`}
-              >
+          {amenities.map((amenity) => {
+            const Icon = ICONS[amenity.icon_name] ?? Dumbbell;
+            const isLarge = amenity.layout === 'large';
+
+            return (
+              <RevealItem key={amenity.id} className={LAYOUT_CLASSES[amenity.layout]}>
                 <div
-                  className={`mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-ember/15 transition-colors group-hover:bg-ember/25 ${
-                    a.big ? 'order-first mb-6 h-14 w-14' : ''
+                  className={`glass-card card-lift group flex h-full flex-col overflow-hidden ${
+                    isLarge ? 'md:min-h-[31rem]' : ''
                   }`}
                 >
-                  <a.icon
-                    className={`text-ember ${a.big ? 'h-7 w-7' : 'h-5 w-5'}`}
-                    strokeWidth={2}
-                  />
+                  <div
+                    className={`relative overflow-hidden bg-ink-900 ${
+                      isLarge ? 'min-h-64 flex-1 md:min-h-72' : 'h-44'
+                    }`}
+                  >
+                    {amenity.image_url ? (
+                      // Admin-supplied URLs can come from any image host.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={amenity.image_url}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 grid-texture opacity-40" />
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-ink-700/70 to-transparent" />
+                  </div>
+
+                  {/* Copy sits on an opaque panel so it never competes with the photo. */}
+                  <div className={`relative flex-none border-t border-white/8 bg-ink-700 p-6 ${isLarge ? 'md:p-8' : ''}`}>
+                    <div
+                      className={`mb-4 inline-flex items-center justify-center rounded-xl bg-ember/15 transition-colors group-hover:bg-ember/25 ${
+                        isLarge ? 'h-14 w-14' : 'h-11 w-11'
+                      }`}
+                    >
+                      <Icon
+                        className={`text-ember ${isLarge ? 'h-7 w-7' : 'h-5 w-5'}`}
+                        strokeWidth={2}
+                      />
+                    </div>
+                    <h3
+                      className={`font-semibold text-bone ${
+                        isLarge ? 'font-display text-3xl tracking-wide' : 'text-lg'
+                      }`}
+                    >
+                      {amenity.title}
+                    </h3>
+                    <p
+                      className={`mt-2 leading-relaxed text-white/60 ${
+                        isLarge ? 'text-base' : 'text-sm'
+                      }`}
+                    >
+                      {amenity.description}
+                    </p>
+                  </div>
                 </div>
-                <h3
-                  className={`font-semibold text-bone ${a.big ? 'font-display text-3xl tracking-wide' : 'text-lg'}`}
-                >
-                  {a.title}
-                </h3>
-                <p className={`mt-2 leading-relaxed text-white/55 ${a.big ? 'text-base' : 'text-sm'}`}>
-                  {a.description}
-                </p>
-              </div>
-            </RevealItem>
-          ))}
+              </RevealItem>
+            );
+          })}
         </RevealGroup>
       </div>
     </section>

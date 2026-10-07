@@ -9,6 +9,7 @@ import {
   CalendarPlus,
   CheckCircle2,
   Clock,
+  Dumbbell,
   Loader2,
   Sparkles,
   User,
@@ -51,6 +52,20 @@ export function BookingsManager() {
     return list.filter((c) => c.category === selectedCategory);
   }, [classesQuery.data, selectedCategory]);
 
+  const routineDays = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, offset) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + offset);
+      const bookings = (bookingsQuery.data ?? []).filter((booking) => {
+        const gymClass = booking.class as GymClass | null;
+        return gymClass && dateKey(new Date(gymClass.schedule_time)) === dateKey(date);
+      });
+      return { date, bookings };
+    });
+  }, [bookingsQuery.data]);
+
   return (
     <div className="space-y-10">
       {/* ---------- Inactive membership notice ---------- */}
@@ -73,6 +88,62 @@ export function BookingsManager() {
           </Link>
         </div>
       )}
+
+      {/* ---------- Weekly routine chart ---------- */}
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="font-display text-3xl tracking-wide text-bone">MY 7-DAY ROUTINE</h2>
+            <p className="mt-1 text-sm text-white/45">
+              Your confirmed training week at a glance.
+            </p>
+          </div>
+          <CalendarDays className="h-6 w-6 flex-none text-ember" />
+        </div>
+
+        <div className="glass-card overflow-x-auto p-4">
+          <div className="grid min-w-[840px] grid-cols-7 gap-3" role="list" aria-label="Seven day training routine">
+            {routineDays.map(({ date, bookings }) => (
+              <div key={date.toISOString()} className="min-h-48 rounded-xl border border-white/8 bg-ink-900/55 p-3" role="listitem">
+                <div className="border-b border-white/8 pb-2 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-ember">
+                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                  </div>
+                  <div className="font-display text-2xl text-bone">{date.getDate()}</div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {bookings.length === 0 ? (
+                    <div className="flex min-h-24 flex-col items-center justify-center gap-2 text-center text-[11px] text-white/25">
+                      <Dumbbell className="h-4 w-4" />
+                      Rest / open day
+                    </div>
+                  ) : (
+                    bookings.map((booking) => {
+                      const gymClass = booking.class as GymClass;
+                      return (
+                        <div key={booking.id} className="rounded-lg border border-ember/20 bg-ember/10 p-2.5">
+                          <div className="line-clamp-2 text-xs font-semibold text-bone">
+                            {gymClass.title}
+                          </div>
+                          <div className="mt-1 text-[10px] text-ember">
+                            {new Date(gymClass.schedule_time).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                          <div className="mt-0.5 truncate text-[10px] text-white/35">
+                            {gymClass.trainer_name || 'Coach TBA'}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ---------- My upcoming bookings ---------- */}
       <section>
@@ -304,6 +375,10 @@ export function BookingsManager() {
       </section>
     </div>
   );
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 function LoadingRow() {

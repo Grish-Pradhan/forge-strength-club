@@ -12,6 +12,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import type { Profile, UserRole } from '@/lib/types';
+import { recordClientActivity } from '@/components/activity-tracker';
 
 /**
  * Auth context — wraps the whole app.
@@ -89,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, fetchProfile]);
 
   const signOut = useCallback(async () => {
+    await recordClientActivity('logout');
     await supabase.auth.signOut();
     // Full reload so server components re-render for the anonymous state.
     window.location.href = '/';
@@ -97,7 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithPassword = useCallback(
     async (email: string, password: string): Promise<string | null> => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return error.message;
+      if (error) {
+        void recordClientActivity('login_failed', { email });
+        return error.message;
+      }
+      void recordClientActivity('login_succeeded', { email });
       return null;
     },
     [supabase],
@@ -110,7 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: { data: { full_name: fullName } },
       });
-      if (error) return error.message;
+      if (error) {
+        void recordClientActivity('registration_failed', { email, name: fullName });
+        return error.message;
+      }
+      void recordClientActivity('registration_succeeded', { email, name: fullName });
       return null;
     },
     [supabase],

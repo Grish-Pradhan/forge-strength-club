@@ -3,7 +3,7 @@ import { DashboardShell } from '@/components/dashboard-shell';
 
 export const metadata: Metadata = {
   title: 'Admin Panel',
-  description: 'Command center — users, classes and content.',
+  description: 'Command center — users, bookings, activity, classes and content.',
   robots: { index: false },
 };
 

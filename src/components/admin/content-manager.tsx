@@ -4,26 +4,36 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Megaphone, Plus, Save, Trash2 } from 'lucide-react';
 import {
+  useAdminAmenities,
   useAdminAnnouncements,
   useAdminMutation,
   useAdminPlans,
   useAdminSiteContent,
 } from '@/lib/hooks/use-admin-data';
 import {
+  deleteAmenityAction,
   deleteAnnouncementAction,
   deletePlanAction,
+  upsertAmenityAction,
   upsertAnnouncementAction,
   upsertPlanAction,
   updateSiteContentAction,
 } from '@/app/actions/admin';
 import { cn, errorMessage, formatPrice } from '@/lib/utils';
-import type { Announcement, BillingCycle, Plan } from '@/lib/types';
+import type {
+  Amenity,
+  AmenityIcon,
+  AmenityLayout,
+  Announcement,
+  BillingCycle,
+  Plan,
+} from '@/lib/types';
 import { Badge, DangerButton, ErrorBanner, Field, Modal, SuccessBanner } from './shared';
 import { ImageUpload } from '@/components/ui/image-upload';
 
 /**
- * Content Management — update landing-page text, membership plans and gym
- * announcements directly from the dashboard. All writes go through the
+ * Content Management — update landing-page text, amenities, membership plans
+ * and gym announcements directly from the dashboard. All writes go through the
  * guarded Server Actions.
  */
 
@@ -287,6 +297,267 @@ function AnnouncementsEditor() {
 }
 
 /* ============================================================================
+ * Amenities editor
+ * ==========================================================================*/
+
+interface AmenityForm {
+  id?: string;
+  title: string;
+  description: string;
+  image_url: string;
+  icon_name: AmenityIcon;
+  layout: AmenityLayout;
+  is_active: boolean;
+  sort_order: string;
+}
+
+const EMPTY_AMENITY: AmenityForm = {
+  title: '',
+  description: '',
+  image_url: '',
+  icon_name: 'dumbbell',
+  layout: 'standard',
+  is_active: true,
+  sort_order: '0',
+};
+
+function AmenitiesEditor() {
+  const amenitiesQuery = useAdminAmenities();
+  const upsert = useAdminMutation(upsertAmenityAction);
+  const remove = useAdminMutation(deleteAmenityAction);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<AmenityForm>(EMPTY_AMENITY);
+
+  function openCreate() {
+    setForm({ ...EMPTY_AMENITY, sort_order: String((amenitiesQuery.data ?? []).length) });
+    setModalOpen(true);
+  }
+
+  function openEdit(amenity: Amenity) {
+    setForm({
+      id: amenity.id,
+      title: amenity.title,
+      description: amenity.description ?? '',
+      image_url: amenity.image_url ?? '',
+      icon_name: amenity.icon_name,
+      layout: amenity.layout,
+      is_active: amenity.is_active,
+      sort_order: String(amenity.sort_order),
+    });
+    setModalOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await upsert.mutateAsync([
+        {
+          ...form,
+          image_url: form.image_url || null,
+          sort_order: Number(form.sort_order),
+        },
+      ]);
+      setModalOpen(false);
+    } catch {
+      // surfaced via banner
+    }
+  }
+
+  return (
+    <section>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-3xl tracking-wide text-bone">AMENITIES</h2>
+          <p className="mt-1 text-sm text-white/50">
+            Manage the image cards shown in the landing-page amenities grid.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="btn-ember inline-flex flex-none items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-ink-800"
+        >
+          <Plus className="h-4 w-4" strokeWidth={3} />
+          New amenity
+        </button>
+      </div>
+
+      <ErrorBanner message={errorMessage(upsert.error ?? remove.error ?? amenitiesQuery.error)} />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {amenitiesQuery.isLoading ? (
+          <div className="glass-card col-span-full flex items-center justify-center gap-3 py-10 text-white/40">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Loading…</span>
+          </div>
+        ) : (amenitiesQuery.data ?? []).length === 0 ? (
+          <div className="glass-card col-span-full p-10 text-center text-sm text-white/40">
+            No amenities yet.
+          </div>
+        ) : (
+          (amenitiesQuery.data ?? []).map((amenity) => (
+            <article key={amenity.id} className="glass-card overflow-hidden">
+              <div className="aspect-video bg-ink-900">
+                {amenity.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={amenity.image_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-white/30">
+                    No image
+                  </div>
+                )}
+              </div>
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold text-bone">{amenity.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-sm text-white/50">
+                      {amenity.description}
+                    </p>
+                  </div>
+                  <Badge tone={amenity.is_active ? 'success' : 'neutral'}>
+                    {amenity.is_active ? 'Live' : 'Hidden'}
+                  </Badge>
+                </div>
+                <div className="mt-3 flex gap-2 text-[11px] uppercase tracking-wide text-white/35">
+                  <span>{amenity.layout}</span>
+                  <span>·</span>
+                  <span>Order {amenity.sort_order}</span>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(amenity)}
+                    className="flex-1 rounded-lg border border-white/10 py-2 text-xs font-semibold text-white/70 transition-all hover:border-ember/50 hover:text-ember"
+                  >
+                    Edit
+                  </button>
+                  <DangerButton
+                    confirmMessage={`Delete amenity "${amenity.title}"?`}
+                    onConfirm={() => void remove.mutateAsync([amenity.id])}
+                    disabled={remove.isPending}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </span>
+                  </DangerButton>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={form.id ? 'EDIT AMENITY' : 'NEW AMENITY'}
+      >
+        <ErrorBanner message={errorMessage(upsert.error)} />
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Field label="Title">
+            <input
+              type="text"
+              required
+              maxLength={100}
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="Elite Strength Floor"
+              className="input"
+            />
+          </Field>
+          <Field label="Description">
+            <textarea
+              rows={3}
+              maxLength={1000}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="What members can expect…"
+              className="input resize-none"
+            />
+          </Field>
+          <ImageUpload
+            value={form.image_url}
+            onChange={(image_url) => setForm({ ...form, image_url })}
+            bucket="site-assets"
+            label="Card image"
+            aspectRatio="video"
+            placeholder="Upload a landscape gym photo (JPG, PNG or WebP)"
+          />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <Field label="Icon">
+              <select
+                value={form.icon_name}
+                onChange={(e) => setForm({ ...form, icon_name: e.target.value as AmenityIcon })}
+                className="input"
+              >
+                <option value="dumbbell">Dumbbell</option>
+                <option value="flame">Flame</option>
+                <option value="waves">Waves</option>
+                <option value="clipboard">Clipboard</option>
+                <option value="users">Community</option>
+                <option value="heart">Heart</option>
+              </select>
+            </Field>
+            <Field label="Card size">
+              <select
+                value={form.layout}
+                onChange={(e) => setForm({ ...form, layout: e.target.value as AmenityLayout })}
+                className="input"
+              >
+                <option value="standard">Standard</option>
+                <option value="wide">Wide</option>
+                <option value="large">Large</option>
+              </select>
+            </Field>
+            <Field label="Order">
+              <input
+                type="number"
+                required
+                value={form.sort_order}
+                onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
+                className="input"
+              />
+            </Field>
+          </div>
+          <label className="flex items-center gap-3 text-sm text-bone">
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+              className="h-4 w-4 accent-[#FF5A1F]"
+            />
+            Live (visible on the landing page)
+          </label>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="btn-outline rounded-lg px-5 py-2.5 text-sm font-semibold text-bone"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={upsert.isPending}
+              className="btn-ember inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold text-ink-800"
+            >
+              {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {form.id ? 'Save changes' : 'Create amenity'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </section>
+  );
+}
+
+/* ============================================================================
  * Plans editor
  * ==========================================================================*/
 
@@ -515,6 +786,7 @@ export function ContentManager() {
       </motion.div>
 
       <SiteCopyEditor />
+      <AmenitiesEditor />
       <AnnouncementsEditor />
       <PlansEditor />
     </div>

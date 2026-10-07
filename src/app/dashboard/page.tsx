@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CalendarPlus,
   CircleUser,
+  Dumbbell,
   Flame,
   UserRound,
 } from 'lucide-react';
@@ -35,17 +36,33 @@ export default async function MemberOverviewPage() {
     supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
     supabase
       .from('bookings')
-      .select('*, class:classes(*)')
+      .select('*, class:classes!inner(*)')
       .eq('user_id', userId)
       .eq('booking_status', 'confirmed')
-      .order('created_at', { ascending: false })
-      .limit(4),
+      .gte('class.schedule_time', new Date().toISOString())
+      .order('created_at', { ascending: false }),
   ]);
 
   const me = profile as Profile | null;
-  const upcoming = (nextBookings as Booking[] | null)?.filter(
-    (b) => b.class && new Date((b.class as { schedule_time: string }).schedule_time) > new Date(),
-  );
+  const upcoming = ((nextBookings as Booking[] | null) ?? [])
+    .filter((booking) => booking.class)
+    .sort(
+      (left, right) =>
+        new Date(left.class!.schedule_time).getTime() -
+        new Date(right.class!.schedule_time).getTime(),
+    );
+  const routineStart = new Date();
+  routineStart.setHours(0, 0, 0, 0);
+  const routineDays = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(routineStart);
+    date.setDate(routineStart.getDate() + offset);
+    return {
+      date,
+      bookings: upcoming.filter(
+        (booking) => dateKey(new Date(booking.class!.schedule_time)) === dateKey(date),
+      ),
+    };
+  });
 
   const firstName = me?.full_name?.split(' ')[0] ?? 'athlete';
   const status = me?.membership_status ?? 'inactive';
@@ -148,6 +165,58 @@ export default async function MemberOverviewPage() {
         </div>
       </Reveal>
 
+      {/* ---------- Weekly routine chart ---------- */}
+      <Reveal delay={0.12}>
+        <section>
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-3xl tracking-wide text-bone">
+                YOUR <span className="text-ember">7-DAY ROUTINE</span>
+              </h2>
+              <p className="mt-1 text-sm text-white/45">Confirmed sessions, arranged like a weekly training chart.</p>
+            </div>
+            <Link href="/dashboard/bookings" className="text-sm font-semibold text-ember hover:underline">
+              Edit routine →
+            </Link>
+          </div>
+          <div className="glass-card overflow-x-auto p-4">
+            <div className="grid min-w-[840px] grid-cols-7 gap-3" role="list" aria-label="Seven day training routine">
+              {routineDays.map(({ date, bookings }) => (
+                <div key={date.toISOString()} className="min-h-44 rounded-xl border border-white/8 bg-ink-900/55 p-3" role="listitem">
+                  <div className="border-b border-white/8 pb-2 text-center">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-ember">
+                      {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                    </div>
+                    <div className="font-display text-2xl text-bone">{date.getDate()}</div>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {bookings.length === 0 ? (
+                      <div className="flex min-h-20 flex-col items-center justify-center gap-2 text-center text-[11px] text-white/25">
+                        <Dumbbell className="h-4 w-4" /> Rest / open day
+                      </div>
+                    ) : (
+                      bookings.map((booking) => (
+                        <div key={booking.id} className="rounded-lg border border-ember/20 bg-ember/10 p-2.5">
+                          <div className="line-clamp-2 text-xs font-semibold text-bone">
+                            {booking.class!.title}
+                          </div>
+                          <div className="mt-1 text-[10px] text-ember">
+                            {new Date(booking.class!.schedule_time).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </Reveal>
+
       {/* ---------- Upcoming booked classes ---------- */}
       <Reveal delay={0.15}>
         <section>
@@ -219,4 +288,8 @@ export default async function MemberOverviewPage() {
       </Reveal>
     </div>
   );
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }

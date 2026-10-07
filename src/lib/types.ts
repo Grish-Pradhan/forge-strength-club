@@ -55,6 +55,11 @@ export interface Booking {
   class?: GymClass | null;
 }
 
+export interface AdminBookingRow extends Booking {
+  profile?: Pick<Profile, 'id' | 'full_name' | 'email' | 'membership_status'> | null;
+  class?: GymClass | null;
+}
+
 export type BillingCycle = 'monthly' | 'annual';
 
 export interface Plan {
@@ -75,6 +80,42 @@ export interface Announcement {
   body: string | null;
   is_active: boolean;
   created_at?: string;
+}
+
+export type AmenityIcon = 'dumbbell' | 'flame' | 'waves' | 'clipboard' | 'users' | 'heart';
+
+export type AmenityLayout = 'standard' | 'wide' | 'large';
+
+export interface Amenity {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  icon_name: AmenityIcon;
+  layout: AmenityLayout;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AuditCategory = 'activity' | 'booking' | 'auth' | 'admin' | 'security';
+export type AuditSeverity = 'info' | 'success' | 'warning' | 'critical';
+
+export interface AuditEvent {
+  id: string;
+  event_type: string;
+  category: AuditCategory;
+  severity: AuditSeverity;
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
+  ip_address: string | null;
+  path: string | null;
+  description: string;
+  metadata: Json;
+  user_agent: string | null;
+  created_at: string;
 }
 
 /** ---------- View models ---------- */
