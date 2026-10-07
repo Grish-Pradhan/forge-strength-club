@@ -249,11 +249,23 @@ revoke all on function public.class_confirmed_count(uuid) from public;
 grant  execute on function public.class_confirmed_count(uuid) to anon, authenticated, service_role;
 
 revoke all on function public.book_class(uuid) from public;
+revoke execute on function public.book_class(uuid) from anon;
 grant  execute on function public.book_class(uuid) to authenticated, service_role;
 
 revoke all on function public.protect_profile_privileged_columns() from public;
 revoke all on function public.handle_new_user() from public;
 revoke all on function public.set_updated_at() from public;
+revoke execute on function public.protect_profile_privileged_columns() from anon, authenticated, service_role;
+revoke execute on function public.handle_new_user() from anon, authenticated, service_role;
+revoke execute on function public.set_updated_at() from anon, authenticated, service_role;
+do $$
+begin
+  if to_regprocedure('public.prevent_role_escalation()') is not null then
+    revoke execute on function public.prevent_role_escalation() from public, anon, authenticated, service_role;
+  end if;
+end;
+$$;
+alter function public.set_updated_at() set search_path = public;
 
 
 -- ============================================================================
