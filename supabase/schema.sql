@@ -650,6 +650,7 @@ insert into storage.buckets (id, name, public) values ('site-assets', 'site-asse
 drop policy if exists "avatars_select_all" on storage.objects;
 drop policy if exists "avatars_read_authenticated" on storage.objects;
 drop policy if exists "avatars_list_own_folder" on storage.objects;
+drop policy if exists "avatars_read_own_folder" on storage.objects;
 -- NOTE: multiple PERMISSIVE policies on the same command are OR-ed together,
 -- so this must be the ONLY select policy on the avatars bucket — adding a
 -- broader "any authenticated user" policy alongside it would silently re-open

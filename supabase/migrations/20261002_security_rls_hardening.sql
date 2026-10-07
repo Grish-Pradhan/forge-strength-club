@@ -199,6 +199,7 @@ revoke insert, delete on public.bookings from anon, authenticated;
 drop policy if exists "avatars_select_all"          on storage.objects;
 drop policy if exists "avatars_read_authenticated"  on storage.objects;
 drop policy if exists "avatars_list_own_folder"     on storage.objects;
+drop policy if exists "avatars_read_own_folder"     on storage.objects;
 create policy "avatars_read_own_folder"
   on storage.objects for select
   using (
